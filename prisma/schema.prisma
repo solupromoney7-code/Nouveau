@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Region {
+  AFRIQUE
+  EUROPE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model Author {
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  emailVerified      Boolean             @default(false)
+  passwordHash       String
+  name               String
+  region             Region              @default(AFRIQUE)
+  createdAt          DateTime            @default(now())
+
+  // Stripe Connect — zone Europe
+  stripeAccountId    String?
+  stripeOnboarded    Boolean             @default(false)
+
+  // Mobile Money — zone Afrique francophone
+  momoOperator       String?
+  momoNumber         String?
+
+  // Abonnement à la plateforme (le plan que l'auteur paie, pas le paiement acheteur)
+  subscriptionStatus SubscriptionStatus  @default(TRIALING)
+  trialEndsAt        DateTime?
+  currentPeriodEnd   DateTime?
+  stripeCustomerId   String?
+
+  books              Book[]
+  leads              Lead[]
+  purchases          Purchase[]
+  payouts            Payout[]
+  emailSequences     EmailSequence[]
+  broadcasts         Broadcast[]
+}
+
+model Book {
+  id          String        @id @default(cuid())
+  authorId    String
+  author      Author        @relation(fields: [authorId], references: [id])
+  title       String
+  fileUrl     String
+  createdAt   DateTime      @default(now())
+
+  salesPage   SalesPage?
+  extractPage ExtractPage?
+  purchases   Purchase[]
+  leads       Lead[]
+}
+
+model SalesPage {
+  id               String   @id @default(cuid())
+  bookId           String   @unique
+  book             Book     @relation(fields: [bookId], references: [id])
+  slug             String   @unique
+  problem          String
+  why              String
+  solution         String
+  priceCents       Int
+  currency         String
+  published        Boolean  @default(false)
+  chariowProductId String?  // zone Afrique — produit Chariow provisionné pour ce livre
+  createdAt        DateTime @default(now())
+}
+
+model ExtractPage {
+  id        String   @id @default(cuid())
+  bookId    String   @unique
+  book      Book     @relation(fields: [bookId], references: [id])
+  slug      String   @unique
+  videoUrl  String?
+  pdfUrl    String?  // fichier PDF de l'extrait, prêt au téléchargement direct
+  createdAt DateTime @default(now())
+}
+
+model Lead {
+  id         String   @id @default(cuid())
+  authorId   String
+  author     Author   @relation(fields: [authorId], references: [id])
+  bookId     String?
+  book       Book?    @relation(fields: [bookId], references: [id])
+  firstName  String
+  lastName   String
+  email      String
+  whatsapp   String
+  source     String   // "extrait" | "acheteur"
+  createdAt  DateTime @default(now())
+
+  emailSends EmailSend[]
+}
+
+model Purchase {
+  id                   String   @id @default(cuid())
+  authorId             String
+  author               Author   @relation(fields: [authorId], references: [id])
+  bookId               String
+  book                 Book     @relation(fields: [bookId], references: [id])
+  buyerEmail           String
+  buyerName            String
+  buyerWhatsapp        String?
+
+  // Adresse de livraison — le livre vendu est un exemplaire papier.
+  shippingAddress      String
+  shippingCity         String
+  shippingPostalCode   String
+  shippingCountry      String
+
+  amountCents          Int
+  currency             String
+  provider             String   // "stripe" | "chariow"
+  providerRef          String
+  status               String   // "pending" | "paid" | "failed"
+  createdAt            DateTime @default(now())
+
+  @@unique([provider, providerRef])
+}
+
+// Demande de reversement de l'auteur (solde des ventes -> Mobile Money ou Stripe).
+// Engagement produit : traité en moins de 24h (voir dueBy).
+model Payout {
+  id          String       @id @default(cuid())
+  authorId    String
+  author      Author       @relation(fields: [authorId], references: [id])
+  amountCents Int
+  currency    String
+  method      String       // "stripe" | "momo"
+  status      PayoutStatus @default(PENDING)
+  providerRef String?      // id du virement Stripe, ou référence de transfert Chariow
+  createdAt   DateTime     @default(now())
+  dueBy       DateTime     // createdAt + 24h — SLA de traitement
+  processedAt DateTime?
+}
+
+// Tunnel de vente automatique ("autorépondeur") : une séquence d'emails
+// programmés qui se déclenchent automatiquement pour chaque contact d'une
+// liste, selon son ancienneté. Un auteur a exactement 2 séquences : une par
+// liste de contacts ("extrait" et "acheteur"), créées automatiquement avec
+// un contenu par défaut (voir lib/sequences.js) dès sa première visite de
+// l'onglet Contenu réseaux / Tunnels.
+model EmailSequence {
+  id         String   @id @default(cuid())
+  authorId   String
+  author     Author   @relation(fields: [authorId], references: [id])
+  listSource String   // "extrait" | "acheteur"
+  name       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  steps      EmailSequenceStep[]
+
+  @@unique([authorId, listSource])
+}
+
+model EmailSequenceStep {
+  id         String   @id @default(cuid())
+  sequenceId String
+  sequence   EmailSequence @relation(fields: [sequenceId], references: [id])
+  order      Int
+  delayDays  Int      // jours après l'entrée du contact dans la liste
+  subject    String
+  body       String
+  createdAt  DateTime @default(now())
+
+  sends      EmailSend[]
+
+  @@unique([sequenceId, order])
+}
+
+// Trace un envoi effectué (empêche de renvoyer deux fois la même étape au
+// même contact).
+model EmailSend {
+  id             String            @id @default(cuid())
+  leadId         String
+  lead           Lead              @relation(fields: [leadId], references: [id])
+  sequenceStepId String
+  sequenceStep   EmailSequenceStep @relation(fields: [sequenceStepId], references: [id])
+  sentAt         DateTime          @default(now())
+
+  @@unique([leadId, sequenceStepId])
+}
+
+// Envoi ponctuel (immédiat ou programmé) à toute une liste — le "envoyer un
+// mail à tous mes clients" en un clic, en plus des tunnels automatiques.
+model Broadcast {
+  id          String    @id @default(cuid())
+  authorId    String
+  author      Author    @relation(fields: [authorId], references: [id])
+  listSource  String    // "extrait" | "acheteur" | "tous"
+  subject     String
+  body        String
+  scheduledAt DateTime
+  sentAt      DateTime?
+  recipients  Int?      // nombre de destinataires au moment de l'envoi
+  status      String    @default("scheduled") // "scheduled" | "sent" | "failed"
+  createdAt   DateTime  @default(now())
+}
