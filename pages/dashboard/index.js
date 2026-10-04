@@ -1,9 +1,9 @@
 import { useState, useRef } from "react";
 import { Sparkles, Upload, Check, Copy, ExternalLink, Loader2, Smartphone, CreditCard } from "lucide-react";
-import DashboardShell from "../components/DashboardShell";
-import { colors, BookCover, ErrorBanner, Spinner } from "../components/ui";
-import { useAuthGuard } from "../lib/useAuthGuard";
-import { api, getToken } from "../lib/apiClient";
+import DashboardShell from "../../components/DashboardShell";
+import { colors, BookCover, ErrorBanner, Spinner } from "../../components/ui";
+import { useAuthGuard } from "../../lib/useAuthGuard";
+import { api, getToken } from "../../lib/apiClient";
 
 function EditableParagraph({ value, onChange }) {
   const [editing, setEditing] = useState(false);

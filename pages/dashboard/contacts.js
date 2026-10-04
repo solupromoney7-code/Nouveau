@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
-import DashboardShell from "../components/DashboardShell";
-import { colors, Spinner, ErrorBanner } from "../components/ui";
-import { useAuthGuard } from "../lib/useAuthGuard";
-import { api } from "../lib/apiClient";
+import DashboardShell from "../../components/DashboardShell";
+import { colors, Spinner, ErrorBanner } from "../../components/ui";
+import { useAuthGuard } from "../../lib/useAuthGuard";
+import { api } from "../../lib/apiClient";
 
 export default function DashboardContacts() {
   const { author, loading: authLoading } = useAuthGuard();
