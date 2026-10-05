@@ -37,33 +37,42 @@ export default function DashboardShell({ active, author, children }) {
           <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: colors.gold }}>
             <BookOpen size={16} color={colors.ink} />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="font-display text-lg leading-none" style={{ color: colors.paper }}>Plume</p>
             <p className="font-mono text-[10px] tracking-wide" style={{ color: colors.mist }}>ESPACE AUTEUR</p>
           </div>
+          <button onClick={handleLogout} title="Se déconnecter" className="shrink-0 p-2 -m-2 md:hidden">
+            <LogOut size={16} color={colors.mist} />
+          </button>
         </div>
 
-        <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible px-3 pb-3 md:pb-4">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = active === item.id;
-            return (
-              <Link
-                key={item.id}
-                href={item.href}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm shrink-0 transition-colors"
-                style={{
-                  backgroundColor: isActive ? "rgba(201,162,39,0.14)" : "transparent",
-                  color: isActive ? colors.gold : colors.mist,
-                }}
-              >
-                <Icon size={16} />
-                {item.label}
-                {item.locked && <Lock size={11} style={{ marginLeft: 2 }} />}
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="relative md:static">
+          <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible px-3 pb-3 md:pb-4 no-scrollbar">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = active === item.id;
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm shrink-0 transition-colors"
+                  style={{
+                    backgroundColor: isActive ? "rgba(201,162,39,0.14)" : "transparent",
+                    color: isActive ? colors.gold : colors.mist,
+                  }}
+                >
+                  <Icon size={16} />
+                  {item.label}
+                  {item.locked && <Lock size={11} style={{ marginLeft: 2 }} />}
+                </Link>
+              );
+            })}
+          </nav>
+          <div
+            className="pointer-events-none absolute top-0 right-0 h-full w-8 md:hidden"
+            style={{ background: `linear-gradient(to right, transparent, ${colors.ink})` }}
+          />
+        </div>
 
         <div className="hidden md:flex items-center gap-2 mt-auto px-4 py-4 border-t" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
           <div
