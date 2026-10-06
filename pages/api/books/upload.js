@@ -1,47 +1,62 @@
-import { put } from "@vercel/blob";
-import { requireAuth } from "../../../lib/auth";
-import { prisma } from "../../../lib/db";
+import { handleUpload } from "@vercel/blob/client";
+import { verifyToken } from "../../../lib/auth";
 
-// Les fonctions serverless Vercel n'ont pas de disque persistant : le
-// fichier du livre est envoyé directement à Vercel Blob (stockage objet),
-// pas sauvegardé sur le système de fichiers local.
-export const config = {
-  api: { bodyParser: false },
-};
-
+// Génère un jeton d'upload "client" : le fichier du livre part directement
+// du navigateur vers Vercel Blob, SANS passer par cette fonction serverless.
+// Raison : les fonctions serverless Vercel plafonnent le corps d'une requête
+// à 4,5 Mo quel que soit le plan — bien en dessous des 50 Mo qu'on promet à
+// l'auteur. Un upload "classique" (fichier envoyé tel quel à l'API) échoue
+// donc dès qu'un PDF dépasse ~4 Mo, avec une erreur Vercel générique (pas du
+// JSON) que le frontend ne sait pas afficher proprement.
+//
+// Cette route n'est pas protégée par requireAuth : le navigateur ne peut
+// pas lui envoyer d'en-tête personnalisé via le client Vercel Blob, donc le
+// jeton JWT de l'auteur est transmis dans clientPayload et vérifié
+// manuellement ci-dessous. onUploadCompleted (rappel serveur-à-serveur de
+// Vercel une fois l'upload terminé) n'est pas utilisé pour écrire en base :
+// il ne fonctionne pas en local, et le navigateur — déjà authentifié —
+// enregistre lui-même le livre juste après, via POST /api/books/register.
 const ALLOWED_EXTENSIONS = [".pdf", ".epub"];
-const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 Mo, cohérent avec le prototype
+const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 Mo
 
-export default requireAuth(async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const rawFilename = String(req.headers["x-filename"] || `livre-${Date.now()}.pdf`);
-  // On ne garde que des caractères sûrs — un nom de fichier ne doit jamais
-  // être utilisé tel quel (chemins, caractères spéciaux).
-  const filename = rawFilename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 150);
+  try {
+    const jsonResponse = await handleUpload({
+      body: req.body,
+      request: req,
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
+        let authorId = null;
+        try {
+          const parsed = JSON.parse(clientPayload || "{}");
+          const tokenPayload = parsed.token && verifyToken(parsed.token);
+          authorId = tokenPayload?.authorId || null;
+        } catch {
+          authorId = null;
+        }
+        if (!authorId) {
+          throw new Error("Non authentifié");
+        }
 
-  const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
-  if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    return res.status(400).json({ error: "Format non autorisé — seuls PDF et EPUB sont acceptés." });
+        const ext = pathname.slice(pathname.lastIndexOf(".")).toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(ext)) {
+          throw new Error("Format non autorisé — seuls PDF et EPUB sont acceptés.");
+        }
+
+        return {
+          allowedContentTypes: ["application/pdf", "application/epub+zip", "application/octet-stream"],
+          addRandomSuffix: true,
+          maximumSizeInBytes: MAX_SIZE_BYTES,
+        };
+      },
+      onUploadCompleted: async () => {
+        // Volontairement vide — voir commentaire en tête de fichier.
+      },
+    });
+
+    return res.status(200).json(jsonResponse);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
   }
-
-  const contentLength = Number(req.headers["content-length"] || 0);
-  if (contentLength > MAX_SIZE_BYTES) {
-    return res.status(413).json({ error: "Fichier trop volumineux (50 Mo max)." });
-  }
-
-  const blob = await put(filename, req, {
-    access: "public",
-    addRandomSuffix: true,
-  });
-
-  const book = await prisma.book.create({
-    data: {
-      authorId: req.authorId,
-      title: filename.replace(/\.[^/.]+$/, ""),
-      fileUrl: blob.url,
-    },
-  });
-
-  return res.status(201).json(book);
-});
+}
