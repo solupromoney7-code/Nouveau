@@ -7,7 +7,7 @@ function slugify(title) {
   return title
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 }
@@ -20,44 +20,55 @@ export default requireAuth(async function handler(req, res) {
     return res.status(400).json({ error: "bookId, priceCents et currency sont requis" });
   }
 
-  const book = await prisma.book.findFirst({
-    where: { id: bookId, authorId: req.authorId },
-    include: { author: true },
-  });
-  if (!book) return res.status(404).json({ error: "Livre introuvable" });
+  try {
+    const book = await prisma.book.findFirst({
+      where: { id: bookId, authorId: req.authorId },
+      include: { author: true },
+    });
+    if (!book) return res.status(404).json({ error: "Livre introuvable" });
 
-  const copy = await generateSalesPageCopy(book);
-  const slug = `${slugify(book.title)}-${book.id.slice(-5)}`;
+    const copy = await generateSalesPageCopy(book);
+    const slug = `${slugify(book.title)}-${book.id.slice(-5)}`;
 
-  let salesPage = await prisma.salesPage.upsert({
-    where: { bookId: book.id },
-    update: { priceCents, currency, ...copy },
-    create: { bookId: book.id, slug, priceCents, currency, ...copy },
-  });
+    let salesPage = await prisma.salesPage.upsert({
+      where: { bookId: book.id },
+      update: { priceCents, currency, ...copy },
+      create: { bookId: book.id, slug, priceCents, currency, ...copy },
+    });
 
-  // Zone Afrique : provisionne un produit Chariow pour ce livre s'il n'en a
-  // pas déjà un, afin que le checkout (POST /api/checkout/create) puisse
-  // s'en servir. Best-effort — voir l'avertissement dans lib/chariow.js.
-  if (book.author.region === "AFRIQUE" && !salesPage.chariowProductId) {
-    try {
-      const product = await createChariowProduct({
-        name: book.title,
-        description: copy.solution?.slice(0, 300) || book.title,
-        priceValue: Math.round(priceCents / 100),
-        currency,
-      });
-      salesPage = await prisma.salesPage.update({
-        where: { id: salesPage.id },
-        data: { chariowProductId: product.id },
-      });
-    } catch (err) {
-      // On ne fait pas échouer la génération de la page pour autant : la
-      // page de vente reste utilisable, mais le checkout renverra une
-      // erreur explicite tant que chariowProductId n'est pas configuré
-      // (manuellement si besoin, voir README).
-      console.error("Provisionnement produit Chariow échoué :", err.message);
+    // Zone Afrique : provisionne un produit Chariow pour ce livre s'il n'en a
+    // pas deja un, afin que le checkout (POST /api/checkout/create) puisse
+    // s'en servir. Best-effort - voir l'avertissement dans lib/chariow.js.
+    if (book.author.region === "AFRIQUE" && !salesPage.chariowProductId) {
+      try {
+        const product = await createChariowProduct({
+          name: book.title,
+          description: copy.solution?.slice(0, 300) || book.title,
+          priceValue: Math.round(priceCents / 100),
+          currency,
+        });
+        salesPage = await prisma.salesPage.update({
+          where: { id: salesPage.id },
+          data: { chariowProductId: product.id },
+        });
+      } catch (err) {
+        // On ne fait pas echouer la generation de la page pour autant : la
+        // page de vente reste utilisable, mais le checkout renverra une
+        // erreur explicite tant que chariowProductId n'est pas configure
+        // (manuellement si besoin, voir README).
+        console.error("Provisionnement produit Chariow echoue :", err.message);
+      }
     }
-  }
 
-  return res.status(201).json(salesPage);
+    return res.status(201).json(salesPage);
+  } catch (error) {
+    // Avant ce correctif, une erreur ici provoquait un crash silencieux
+    // (page d'erreur HTML generique de Next.js), sans aucun detail cote
+    // client ni log exploitable. On capture et on journalise maintenant
+    // explicitement pour pouvoir diagnostiquer.
+    console.error("Erreur dans /api/sales-pages :", error);
+    return res.status(500).json({
+      error: error.message || "Erreur inconnue lors de la generation de la page de vente.",
+    });
+  }
 });
