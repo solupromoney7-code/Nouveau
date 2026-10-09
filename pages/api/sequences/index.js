@@ -13,44 +13,49 @@ import { DEFAULT_SEQUENCES } from "../../../lib/sequences";
 export default requireAuth(async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).end();
 
-  let existing = await prisma.emailSequence.findMany({
-    where: { authorId: req.authorId },
-    include: { steps: { orderBy: { order: "asc" } } },
-  });
-
-  const existingSources = new Set(existing.map((s) => s.listSource));
-  const missingSequences = Object.keys(DEFAULT_SEQUENCES).filter((src) => !existingSources.has(src));
-
-  for (const listSource of missingSequences) {
-    const def = DEFAULT_SEQUENCES[listSource];
-    await prisma.emailSequence.create({
-      data: {
-        authorId: req.authorId,
-        listSource,
-        name: def.name,
-        steps: { create: def.steps },
-      },
+  try {
+    let existing = await prisma.emailSequence.findMany({
+      where: { authorId: req.authorId },
+      include: { steps: { orderBy: { order: "asc" } } },
     });
-  }
 
-  // Backfill : pour les tunnels déjà existants, ajoute les étapes par
-  // défaut dont l'ordre n'est pas encore présent.
-  for (const sequence of existing) {
-    const def = DEFAULT_SEQUENCES[sequence.listSource];
-    if (!def) continue;
-    const existingOrders = new Set(sequence.steps.map((s) => s.order));
-    const stepsToAdd = def.steps.filter((s) => !existingOrders.has(s.order));
-    if (stepsToAdd.length > 0) {
-      await prisma.emailSequenceStep.createMany({
-        data: stepsToAdd.map((s) => ({ ...s, sequenceId: sequence.id })),
+    const existingSources = new Set(existing.map((s) => s.listSource));
+    const missingSequences = Object.keys(DEFAULT_SEQUENCES).filter((src) => !existingSources.has(src));
+
+    for (const listSource of missingSequences) {
+      const def = DEFAULT_SEQUENCES[listSource];
+      await prisma.emailSequence.create({
+        data: {
+          authorId: req.authorId,
+          listSource,
+          name: def.name,
+          steps: { create: def.steps },
+        },
       });
     }
+
+    // Backfill : pour les tunnels déjà existants, ajoute les étapes par
+    // défaut dont l'ordre n'est pas encore présent.
+    for (const sequence of existing) {
+      const def = DEFAULT_SEQUENCES[sequence.listSource];
+      if (!def) continue;
+      const existingOrders = new Set(sequence.steps.map((s) => s.order));
+      const stepsToAdd = def.steps.filter((s) => !existingOrders.has(s.order));
+      if (stepsToAdd.length > 0) {
+        await prisma.emailSequenceStep.createMany({
+          data: stepsToAdd.map((s) => ({ ...s, sequenceId: sequence.id })),
+        });
+      }
+    }
+
+    const result = await prisma.emailSequence.findMany({
+      where: { authorId: req.authorId },
+      include: { steps: { orderBy: { order: "asc" } } },
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Erreur /api/sequences :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
   }
-
-  const result = await prisma.emailSequence.findMany({
-    where: { authorId: req.authorId },
-    include: { steps: { orderBy: { order: "asc" } } },
-  });
-
-  return res.status(200).json(result);
 });

@@ -8,12 +8,17 @@ export default requireAuth(async function handler(req, res) {
   const { id } = req.query;
   const { active } = req.body;
 
-  const sequence = await prisma.emailSequence.findFirst({ where: { id, authorId: req.authorId } });
-  if (!sequence) return res.status(404).json({ error: "Tunnel introuvable" });
+  try {
+    const sequence = await prisma.emailSequence.findFirst({ where: { id, authorId: req.authorId } });
+    if (!sequence) return res.status(404).json({ error: "Tunnel introuvable" });
 
-  const updated = await prisma.emailSequence.update({
-    where: { id },
-    data: { active: Boolean(active) },
-  });
-  return res.status(200).json(updated);
+    const updated = await prisma.emailSequence.update({
+      where: { id },
+      data: { active: Boolean(active) },
+    });
+    return res.status(200).json(updated);
+  } catch (error) {
+    console.error("Erreur /api/sequences/[id] :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
 });

@@ -1,3 +1,8 @@
+#!/bin/bash
+set -e
+
+mkdir -p "pages/dashboard"
+cat > "pages/dashboard/tunnels.js" << 'FILE_EOF_MARKER'
 import { useEffect, useState } from "react";
 import { Mail, ChevronDown, ChevronRight, Check } from "lucide-react";
 import DashboardShell from "../../components/DashboardShell";
@@ -204,3 +209,136 @@ export default function DashboardTunnels() {
     </DashboardShell>
   );
 }
+FILE_EOF_MARKER
+
+mkdir -p "pages/api/sequences"
+cat > "pages/api/sequences/index.js" << 'FILE_EOF_MARKER'
+import { requireAuth } from "../../../lib/auth";
+import { prisma } from "../../../lib/db";
+import { DEFAULT_SEQUENCES } from "../../../lib/sequences";
+
+// Retourne les 2 tunnels de vente de l'auteur (extrait, acheteur), en les
+// créant automatiquement avec leur contenu par défaut au premier appel —
+// l'auteur n'a jamais de tunnel vide à configurer depuis zéro.
+//
+// Complète aussi les étapes manquantes d'un tunnel déjà existant (ex. un
+// compte créé avant le passage de 3 à 7 étapes par défaut) : seules les
+// étapes dont le numéro d'ordre n'existe pas encore sont ajoutées, sans
+// jamais toucher aux étapes déjà personnalisées par l'auteur.
+export default requireAuth(async function handler(req, res) {
+  if (req.method !== "GET") return res.status(405).end();
+
+  try {
+    let existing = await prisma.emailSequence.findMany({
+      where: { authorId: req.authorId },
+      include: { steps: { orderBy: { order: "asc" } } },
+    });
+
+    const existingSources = new Set(existing.map((s) => s.listSource));
+    const missingSequences = Object.keys(DEFAULT_SEQUENCES).filter((src) => !existingSources.has(src));
+
+    for (const listSource of missingSequences) {
+      const def = DEFAULT_SEQUENCES[listSource];
+      await prisma.emailSequence.create({
+        data: {
+          authorId: req.authorId,
+          listSource,
+          name: def.name,
+          steps: { create: def.steps },
+        },
+      });
+    }
+
+    // Backfill : pour les tunnels déjà existants, ajoute les étapes par
+    // défaut dont l'ordre n'est pas encore présent.
+    for (const sequence of existing) {
+      const def = DEFAULT_SEQUENCES[sequence.listSource];
+      if (!def) continue;
+      const existingOrders = new Set(sequence.steps.map((s) => s.order));
+      const stepsToAdd = def.steps.filter((s) => !existingOrders.has(s.order));
+      if (stepsToAdd.length > 0) {
+        await prisma.emailSequenceStep.createMany({
+          data: stepsToAdd.map((s) => ({ ...s, sequenceId: sequence.id })),
+        });
+      }
+    }
+
+    const result = await prisma.emailSequence.findMany({
+      where: { authorId: req.authorId },
+      include: { steps: { orderBy: { order: "asc" } } },
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Erreur /api/sequences :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
+});
+FILE_EOF_MARKER
+
+mkdir -p "pages/api/sequences"
+cat > "pages/api/sequences/[id].js" << 'FILE_EOF_MARKER'
+import { requireAuth } from "../../../lib/auth";
+import { prisma } from "../../../lib/db";
+
+// Active/désactive un tunnel (l'auteur peut couper l'automatisation sans
+// perdre son contenu).
+export default requireAuth(async function handler(req, res) {
+  if (req.method !== "PATCH") return res.status(405).end();
+  const { id } = req.query;
+  const { active } = req.body;
+
+  try {
+    const sequence = await prisma.emailSequence.findFirst({ where: { id, authorId: req.authorId } });
+    if (!sequence) return res.status(404).json({ error: "Tunnel introuvable" });
+
+    const updated = await prisma.emailSequence.update({
+      where: { id },
+      data: { active: Boolean(active) },
+    });
+    return res.status(200).json(updated);
+  } catch (error) {
+    console.error("Erreur /api/sequences/[id] :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
+});
+FILE_EOF_MARKER
+
+mkdir -p "pages/api/sequences/steps"
+cat > "pages/api/sequences/steps/[stepId].js" << 'FILE_EOF_MARKER'
+import { requireAuth } from "../../../../lib/auth";
+import { prisma } from "../../../../lib/db";
+
+// Édite le sujet/texte/délai d'une étape d'un tunnel — c'est le seul geste
+// de personnalisation attendu de l'auteur, le reste est pré-rempli.
+export default requireAuth(async function handler(req, res) {
+  if (req.method !== "PATCH") return res.status(405).end();
+  const { stepId } = req.query;
+  const { subject, body, delayDays } = req.body;
+
+  try {
+    const step = await prisma.emailSequenceStep.findUnique({
+      where: { id: stepId },
+      include: { sequence: true },
+    });
+    if (!step || step.sequence.authorId !== req.authorId) {
+      return res.status(404).json({ error: "Étape introuvable" });
+    }
+
+    const updated = await prisma.emailSequenceStep.update({
+      where: { id: stepId },
+      data: {
+        ...(subject !== undefined && { subject }),
+        ...(body !== undefined && { body }),
+        ...(delayDays !== undefined && { delayDays: Number(delayDays) }),
+      },
+    });
+    return res.status(200).json(updated);
+  } catch (error) {
+    console.error("Erreur /api/sequences/steps/[stepId] :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
+});
+FILE_EOF_MARKER
+
+echo "Fichiers mis à jour avec succès."

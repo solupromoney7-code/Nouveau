@@ -8,21 +8,26 @@ export default requireAuth(async function handler(req, res) {
   const { stepId } = req.query;
   const { subject, body, delayDays } = req.body;
 
-  const step = await prisma.emailSequenceStep.findUnique({
-    where: { id: stepId },
-    include: { sequence: true },
-  });
-  if (!step || step.sequence.authorId !== req.authorId) {
-    return res.status(404).json({ error: "Étape introuvable" });
-  }
+  try {
+    const step = await prisma.emailSequenceStep.findUnique({
+      where: { id: stepId },
+      include: { sequence: true },
+    });
+    if (!step || step.sequence.authorId !== req.authorId) {
+      return res.status(404).json({ error: "Étape introuvable" });
+    }
 
-  const updated = await prisma.emailSequenceStep.update({
-    where: { id: stepId },
-    data: {
-      ...(subject !== undefined && { subject }),
-      ...(body !== undefined && { body }),
-      ...(delayDays !== undefined && { delayDays: Number(delayDays) }),
-    },
-  });
-  return res.status(200).json(updated);
+    const updated = await prisma.emailSequenceStep.update({
+      where: { id: stepId },
+      data: {
+        ...(subject !== undefined && { subject }),
+        ...(body !== undefined && { body }),
+        ...(delayDays !== undefined && { delayDays: Number(delayDays) }),
+      },
+    });
+    return res.status(200).json(updated);
+  } catch (error) {
+    console.error("Erreur /api/sequences/steps/[stepId] :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
 });
