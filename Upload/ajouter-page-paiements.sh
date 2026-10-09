@@ -1,3 +1,8 @@
+#!/bin/bash
+set -e
+
+mkdir -p "pages/dashboard"
+cat > "pages/dashboard/paiements.js" << 'FILE_EOF_MARKER'
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Wallet, Clock, Check, X, AlertTriangle, ArrowRight, Smartphone, CreditCard } from "lucide-react";
@@ -242,3 +247,175 @@ export default function DashboardPaiements() {
     </DashboardShell>
   );
 }
+FILE_EOF_MARKER
+
+mkdir -p "pages/api/payouts"
+cat > "pages/api/payouts/balance.js" << 'FILE_EOF_MARKER'
+import { requireAuth } from "../../../lib/auth";
+import { prisma } from "../../../lib/db";
+import { stripe } from "../../../lib/stripe";
+import { computeAfriqueBalance } from "../../../lib/chariow-earnings";
+
+// Solde disponible = ce qu'on peut honnêtement promettre de reverser sous
+// 24h. Pour la zone Europe, Stripe distingue déjà nativement available vs
+// pending (et ses frais sont déjà déduits du montant retourné). Pour la
+// zone Afrique, voir lib/chariow-earnings.js : on ne rend "disponible" que
+// les ventes déjà matures (au-delà du délai réel de règlement Chariow), nettes
+// de leur commission — jamais un montant qu'on n'a pas encore en main.
+export default requireAuth(async function handler(req, res) {
+  if (req.method !== "GET") return res.status(405).end();
+
+  try {
+    const author = await prisma.author.findUnique({ where: { id: req.authorId } });
+
+    if (author.region === "EUROPE") {
+      if (!author.stripeAccountId || !author.stripeOnboarded) {
+        return res.status(200).json({ availableCents: 0, currency: "EUR", pendingCents: 0, method: "stripe", connected: false });
+      }
+      const balance = await stripe.balance.retrieve({ stripeAccount: author.stripeAccountId });
+      const available = balance.available.reduce((sum, b) => sum + b.amount, 0);
+      const pending = balance.pending.reduce((sum, b) => sum + b.amount, 0);
+      return res.status(200).json({
+        availableCents: available,
+        pendingCents: pending,
+        currency: (balance.available[0]?.currency || "eur").toUpperCase(),
+        method: "stripe",
+        connected: true,
+        note: "Montant déjà net des frais Stripe.",
+      });
+    }
+
+    const balance = await computeAfriqueBalance(author.id);
+    return res.status(200).json({
+      ...balance,
+      method: "momo",
+      connected: Boolean(author.momoNumber),
+      note: `Net des frais de transaction (${Math.round(balance.commissionRate * 100)}%). Une vente devient disponible ${balance.maturityDays} jours après l'achat.`,
+    });
+  } catch (error) {
+    console.error("Erreur /api/payouts/balance :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
+});
+FILE_EOF_MARKER
+
+mkdir -p "pages/api/payouts"
+cat > "pages/api/payouts/history.js" << 'FILE_EOF_MARKER'
+import { requireAuth } from "../../../lib/auth";
+import { prisma } from "../../../lib/db";
+
+export default requireAuth(async function handler(req, res) {
+  if (req.method !== "GET") return res.status(405).end();
+  try {
+    const payouts = await prisma.payout.findMany({
+      where: { authorId: req.authorId },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.status(200).json(payouts);
+  } catch (error) {
+    console.error("Erreur /api/payouts/history :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
+});
+FILE_EOF_MARKER
+
+mkdir -p "pages/api/payouts"
+cat > "pages/api/payouts/request.js" << 'FILE_EOF_MARKER'
+import { requireAuth } from "../../../lib/auth";
+import { prisma } from "../../../lib/db";
+import { stripe } from "../../../lib/stripe";
+import { computeAfriqueBalance } from "../../../lib/chariow-earnings";
+
+// Engagement produit : toute demande de reversement est traitée en moins de
+// 24h. dueBy est enregistré pour piloter ce SLA côté opérations. Cet
+// engagement reste tenable car on ne valide jamais une demande au-delà du
+// solde "disponible" (voir lib/chariow-earnings.js côté Afrique) — on ne
+// promet jamais un montant qu'on n'a pas encore réellement reçu.
+const SLA_MS = 24 * 60 * 60 * 1000;
+
+export default requireAuth(async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).end();
+
+  try {
+    const { amountCents } = req.body;
+    if (!amountCents || amountCents <= 0) {
+      return res.status(400).json({ error: "Montant invalide" });
+    }
+
+    const author = await prisma.author.findUnique({ where: { id: req.authorId } });
+    if (!author.emailVerified) {
+      return res.status(403).json({ error: "Confirmez votre adresse email avant de demander un reversement (vérifiez votre boîte mail, ou renvoyez le lien depuis Paramètres)." });
+    }
+    const dueBy = new Date(Date.now() + SLA_MS);
+
+    // --- Zone Europe : Stripe déclenche un vrai virement vers le compte connecté ---
+    if (author.region === "EUROPE") {
+      if (!author.stripeAccountId || !author.stripeOnboarded) {
+        return res.status(400).json({ error: "Compte Stripe non connecté" });
+      }
+
+      const balance = await stripe.balance.retrieve({ stripeAccount: author.stripeAccountId });
+      const available = balance.available.reduce((sum, b) => sum + b.amount, 0);
+      if (amountCents > available) {
+        return res.status(400).json({ error: "Montant supérieur au solde disponible" });
+      }
+
+      const currency = (balance.available[0]?.currency || "eur");
+      const stripePayout = await stripe.payouts.create(
+        { amount: amountCents, currency },
+        { stripeAccount: author.stripeAccountId }
+      );
+
+      const payout = await prisma.payout.create({
+        data: {
+          authorId: author.id,
+          amountCents,
+          currency: currency.toUpperCase(),
+          method: "stripe",
+          status: stripePayout.status === "paid" ? "PAID" : "PENDING",
+          providerRef: stripePayout.id,
+          dueBy,
+          processedAt: stripePayout.status === "paid" ? new Date() : null,
+        },
+      });
+      return res.status(201).json(payout);
+    }
+
+    // --- Zone Afrique : reversement Mobile Money, plafonné au solde réellement mature ---
+    if (!author.momoNumber) {
+      return res.status(400).json({ error: "Numéro Mobile Money non configuré" });
+    }
+
+    const balance = await computeAfriqueBalance(author.id);
+    if (amountCents > balance.availableCents) {
+      return res.status(400).json({
+        error: "Montant supérieur au solde disponible",
+        availableCents: balance.availableCents,
+        pendingMaturityNetCents: balance.pendingMaturityNetCents,
+      });
+    }
+
+    // TODO production : Chariow ne propose pas d'API de transfert vers un
+    // tiers (seulement un retrait vers TON propre Mobile Money, voir README
+    // §4.1) — ce Payout reste donc à traiter manuellement : retire les fonds
+    // sur ton Mobile Money puis envoie la part de l'auteur, avant dueBy.
+    const payout = await prisma.payout.create({
+      data: {
+        authorId: author.id,
+        amountCents,
+        currency: "XOF",
+        method: "momo",
+        status: "PENDING",
+        dueBy,
+      },
+    });
+
+    return res.status(201).json(payout);
+  } catch (error) {
+    console.error("Erreur /api/payouts/request :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
+});
+FILE_EOF_MARKER
+
+echo "Fichiers mis à jour avec succès."

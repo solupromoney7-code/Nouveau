@@ -12,30 +12,35 @@ import { computeAfriqueBalance } from "../../../lib/chariow-earnings";
 export default requireAuth(async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).end();
 
-  const author = await prisma.author.findUnique({ where: { id: req.authorId } });
+  try {
+    const author = await prisma.author.findUnique({ where: { id: req.authorId } });
 
-  if (author.region === "EUROPE") {
-    if (!author.stripeAccountId || !author.stripeOnboarded) {
-      return res.status(200).json({ availableCents: 0, currency: "EUR", pendingCents: 0, method: "stripe", connected: false });
+    if (author.region === "EUROPE") {
+      if (!author.stripeAccountId || !author.stripeOnboarded) {
+        return res.status(200).json({ availableCents: 0, currency: "EUR", pendingCents: 0, method: "stripe", connected: false });
+      }
+      const balance = await stripe.balance.retrieve({ stripeAccount: author.stripeAccountId });
+      const available = balance.available.reduce((sum, b) => sum + b.amount, 0);
+      const pending = balance.pending.reduce((sum, b) => sum + b.amount, 0);
+      return res.status(200).json({
+        availableCents: available,
+        pendingCents: pending,
+        currency: (balance.available[0]?.currency || "eur").toUpperCase(),
+        method: "stripe",
+        connected: true,
+        note: "Montant déjà net des frais Stripe.",
+      });
     }
-    const balance = await stripe.balance.retrieve({ stripeAccount: author.stripeAccountId });
-    const available = balance.available.reduce((sum, b) => sum + b.amount, 0);
-    const pending = balance.pending.reduce((sum, b) => sum + b.amount, 0);
-    return res.status(200).json({
-      availableCents: available,
-      pendingCents: pending,
-      currency: (balance.available[0]?.currency || "eur").toUpperCase(),
-      method: "stripe",
-      connected: true,
-      note: "Montant déjà net des frais Stripe.",
-    });
-  }
 
-  const balance = await computeAfriqueBalance(author.id);
-  return res.status(200).json({
-    ...balance,
-    method: "momo",
-    connected: Boolean(author.momoNumber),
-    note: `Net des frais de transaction (${Math.round(balance.commissionRate * 100)}%). Une vente devient disponible ${balance.maturityDays} jours après l'achat.`,
-  });
+    const balance = await computeAfriqueBalance(author.id);
+    return res.status(200).json({
+      ...balance,
+      method: "momo",
+      connected: Boolean(author.momoNumber),
+      note: `Net des frais de transaction (${Math.round(balance.commissionRate * 100)}%). Une vente devient disponible ${balance.maturityDays} jours après l'achat.`,
+    });
+  } catch (error) {
+    console.error("Erreur /api/payouts/balance :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
 });
