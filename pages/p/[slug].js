@@ -4,23 +4,9 @@ import Link from "next/link";
 import { BookOpen, Smartphone, CreditCard, Loader2, Truck } from "lucide-react";
 import { prisma } from "../../lib/db";
 import { colors, BookCover, ErrorBanner } from "../../components/ui";
+import { COUNTRY_CODES, getVisitorCountryCode } from "../../lib/countryCodes";
 
-const COUNTRY_CODES = [
-  { code: "+225", label: "Côte d'Ivoire (+225)" },
-  { code: "+221", label: "Sénégal (+221)" },
-  { code: "+229", label: "Bénin (+229)" },
-  { code: "+228", label: "Togo (+228)" },
-  { code: "+223", label: "Mali (+223)" },
-  { code: "+226", label: "Burkina Faso (+226)" },
-  { code: "+237", label: "Cameroun (+237)" },
-  { code: "+224", label: "Guinée (+224)" },
-  { code: "+33", label: "France (+33)" },
-  { code: "+32", label: "Belgique (+32)" },
-  { code: "+41", label: "Suisse (+41)" },
-  { code: "+1", label: "Canada (+1)" },
-];
-
-export async function getServerSideProps({ params }) {
+export async function getServerSideProps({ params, req }) {
   const salesPage = await prisma.salesPage.findUnique({
     where: { slug: params.slug },
     include: { book: { include: { author: true } } },
@@ -43,6 +29,7 @@ export async function getServerSideProps({ params }) {
         region: salesPage.book.author.region,
         slug: salesPage.slug,
         turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || "",
+        defaultCountryCode: getVisitorCountryCode(req),
       },
     },
   };
@@ -55,13 +42,13 @@ export default function PublicSalesPage({ page }) {
   const [form, setForm] = useState({
     buyerName: "",
     buyerEmail: "",
-    countryCode: "+225",
+    countryCode: page.defaultCountryCode || "+225",
     whatsappNumber: "",
     shippingAddress: "",
     shippingCity: "",
     shippingPostalCode: "",
     shippingCountry: "",
-    website: "", // honeypot — jamais rempli par un humain
+    hp: "", // honeypot — jamais rempli par un humain
   });
 
   const currencyLabel = page.currency === "EUR" ? "€" : page.currency;
@@ -96,7 +83,7 @@ export default function PublicSalesPage({ page }) {
           shippingCity: form.shippingCity,
           shippingPostalCode: form.shippingPostalCode,
           shippingCountry: form.shippingCountry,
-          website: form.website,
+          website: form.hp,
         }),
       });
       const data = await res.json();
@@ -189,12 +176,15 @@ export default function PublicSalesPage({ page }) {
 
             <ErrorBanner message={error} />
 
-            {/* Honeypot anti-bot — invisible pour un humain */}
+            {/* Honeypot anti-bot — invisible pour un humain. Nom volontairement
+                neutre pour éviter que Chrome ne le remplisse automatiquement
+                avec une adresse enregistrée (ce qui arrivait avec name="website"). */}
             <input
               type="text"
-              name="website"
-              value={form.website}
-              onChange={(e) => update("website", e.target.value)}
+              name="hp"
+              id="hp-field-p"
+              value={form.hp}
+              onChange={(e) => update("hp", e.target.value)}
               autoComplete="off"
               tabIndex={-1}
               className="absolute opacity-0 pointer-events-none -z-10"

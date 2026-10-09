@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BookOpen, Download, Loader2, Mail } from "lucide-react";
 import { prisma } from "../../lib/db";
 import { colors, BookCover, ErrorBanner } from "../../components/ui";
+import { COUNTRY_CODES, getVisitorCountryCode } from "../../lib/countryCodes";
 
 function getEmbedUrl(url) {
   if (!url) return null;
@@ -27,7 +28,7 @@ function getEmbedUrl(url) {
   return null;
 }
 
-export async function getServerSideProps({ params }) {
+export async function getServerSideProps({ params, req }) {
   const extractPage = await prisma.extractPage.findUnique({
     where: { slug: params.slug },
     include: { book: { include: { author: true } } },
@@ -44,6 +45,7 @@ export async function getServerSideProps({ params }) {
         authorName: extractPage.book.author.name,
         slug: extractPage.slug,
         embedUrl: getEmbedUrl(extractPage.videoUrl) || "",
+        defaultCountryCode: getVisitorCountryCode(req),
       },
     },
   };
@@ -58,8 +60,9 @@ export default function PublicExtractPage({ page }) {
     firstName: "",
     lastName: "",
     email: "",
-    whatsapp: "",
-    website: "", // honeypot — jamais rempli par un humain
+    countryCode: page.defaultCountryCode || "+225",
+    whatsappNumber: "",
+    hp: "", // honeypot — jamais rempli par un humain
   });
 
   function update(field, value) {
@@ -70,7 +73,7 @@ export default function PublicExtractPage({ page }) {
     e.preventDefault();
     setError("");
 
-    if (!form.firstName || !form.email || !form.whatsapp) {
+    if (!form.firstName || !form.email || !form.whatsappNumber) {
       setError("Merci de remplir tous les champs.");
       return;
     }
@@ -80,7 +83,14 @@ export default function PublicExtractPage({ page }) {
       const res = await fetch("/api/leads/capture", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: page.slug, ...form }),
+        body: JSON.stringify({
+          slug: page.slug,
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          whatsapp: `${form.countryCode}${form.whatsappNumber}`,
+          website: form.hp,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Une erreur est survenue.");
@@ -151,12 +161,15 @@ export default function PublicExtractPage({ page }) {
 
             <ErrorBanner message={error} />
 
-            {/* Honeypot anti-bot — invisible pour un humain */}
+            {/* Honeypot anti-bot — invisible pour un humain. Nom volontairement
+                neutre pour éviter que Chrome ne le remplisse automatiquement
+                avec une adresse enregistrée (ce qui arrivait avec name="website"). */}
             <input
               type="text"
-              name="website"
-              value={form.website}
-              onChange={(e) => update("website", e.target.value)}
+              name="hp"
+              id="hp-field-e"
+              value={form.hp}
+              onChange={(e) => update("hp", e.target.value)}
               autoComplete="off"
               tabIndex={-1}
               className="absolute opacity-0 pointer-events-none -z-10"
@@ -186,12 +199,25 @@ export default function PublicExtractPage({ page }) {
               style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
             />
 
-            <input
-              type="tel" required placeholder="Numéro WhatsApp"
-              value={form.whatsapp} onChange={(e) => update("whatsapp", e.target.value)}
-              className="rounded-lg px-3 py-2.5 font-body text-sm w-full"
-              style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
-            />
+            <div className="flex gap-2">
+              <select
+                value={form.countryCode}
+                onChange={(e) => update("countryCode", e.target.value)}
+                className="rounded-lg px-2 py-2.5 font-body text-sm"
+                style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
+              >
+                {COUNTRY_CODES.map((c) => (
+                  <option key={c.iso} value={c.code}>{c.code}</option>
+                ))}
+              </select>
+              <input
+                type="tel" required placeholder="Numéro WhatsApp"
+                value={form.whatsappNumber}
+                onChange={(e) => update("whatsappNumber", e.target.value.replace(/[^0-9]/g, ""))}
+                className="rounded-lg px-3 py-2.5 font-body text-sm w-full"
+                style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
+              />
+            </div>
 
             <button
               type="submit"
@@ -229,4 +255,3 @@ export default function PublicExtractPage({ page }) {
     </div>
   );
 }
-
