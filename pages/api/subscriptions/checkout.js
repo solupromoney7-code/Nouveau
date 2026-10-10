@@ -9,22 +9,27 @@ import { initChariowCheckout } from "../../../lib/chariow";
 export default requireAuth(async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const author = await prisma.author.findUnique({ where: { id: req.authorId } });
-  const [firstName, ...rest] = author.name.split(" ");
+  try {
+    const author = await prisma.author.findUnique({ where: { id: req.authorId } });
+    const [firstName, ...rest] = author.name.split(" ");
 
-  const result = await initChariowCheckout({
-    productId: process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID,
-    email: author.email,
-    firstName: firstName || author.name,
-    lastName: rest.join(" ") || author.name,
-    redirectUrl: `${process.env.APP_URL}/dashboard/abonnement?paiement=retour`,
-    paymentCurrency: author.region === "EUROPE" ? "EUR" : "XOF",
-    metadata: { authorId: author.id, kind: "subscription" },
-  });
+    const result = await initChariowCheckout({
+      productId: process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID,
+      email: author.email,
+      firstName: firstName || author.name,
+      lastName: rest.join(" ") || author.name,
+      redirectUrl: `${process.env.APP_URL}/dashboard/abonnement?paiement=retour`,
+      paymentCurrency: author.region === "EUROPE" ? "EUR" : "XOF",
+      metadata: { authorId: author.id, kind: "subscription" },
+    });
 
-  if (result.step === "already_purchased") {
-    return res.status(200).json({ status: "already_active" });
+    if (result.step === "already_purchased") {
+      return res.status(200).json({ status: "already_active" });
+    }
+
+    return res.status(200).json({ url: result.payment?.checkout_url });
+  } catch (error) {
+    console.error("Erreur /api/subscriptions/checkout :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
   }
-
-  return res.status(200).json({ url: result.payment?.checkout_url });
 });
