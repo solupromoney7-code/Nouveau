@@ -48,6 +48,9 @@ model Author {
   currentPeriodEnd   DateTime?
   stripeCustomerId   String?
 
+  // Vitrine publique listant tous les livres publiés de l'auteur (Ma boutique)
+  storeSlug          String?             @unique
+
   books              Book[]
   leads              Lead[]
   purchases          Purchase[]
