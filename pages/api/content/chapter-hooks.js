@@ -1,15 +1,18 @@
 import { requireAuth } from "../../../lib/auth";
 import { prisma } from "../../../lib/db";
-import { generateSocialPosts } from "../../../lib/ai";
+import { generateChapterHookScripts } from "../../../lib/ai";
 import { isSubscriptionActive } from "../../../lib/subscription";
 
-// Génération de contenu réseaux sociaux — réservée aux comptes avec un
-// abonnement actif ou en période d'essai (voir lib/subscription.js).
+// Lit le livre en entier et génère, pour chaque chapitre, 5 hooks d'accroche
+// et 5 scripts vidéo courts — réservé aux comptes avec un abonnement actif
+// (voir lib/subscription.js), comme la génération de posts réseaux.
+export const config = { maxDuration: 60 };
+
 export default requireAuth(async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
   try {
-    const { bookId, count } = req.body;
+    const { bookId } = req.body;
     if (!bookId) return res.status(400).json({ error: "bookId requis" });
 
     const author = await prisma.author.findUnique({ where: { id: req.authorId } });
@@ -20,10 +23,10 @@ export default requireAuth(async function handler(req, res) {
     const book = await prisma.book.findFirst({ where: { id: bookId, authorId: req.authorId } });
     if (!book) return res.status(404).json({ error: "Livre introuvable" });
 
-    const posts = await generateSocialPosts(book, count || 20);
-    return res.status(200).json({ posts });
+    const chapters = await generateChapterHookScripts(book);
+    return res.status(200).json({ chapters });
   } catch (error) {
-    console.error("Erreur /api/content/generate :", error);
+    console.error("Erreur /api/content/chapter-hooks :", error);
     return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
   }
 });
