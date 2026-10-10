@@ -1,3 +1,123 @@
+#!/bin/bash
+set -e
+echo "Mise à jour : page Paramètres + correction email de confirmation"
+
+mkdir -p "$(dirname "pages/api/auth/resend-verification.js")"
+cat > "pages/api/auth/resend-verification.js" << 'FILE_EOF_MARKER'
+import { requireAuth } from "../../../lib/auth";
+import { prisma } from "../../../lib/db";
+import { signToken } from "../../../lib/auth";
+import { sendVerificationEmail } from "../../../lib/email";
+import { checkRateLimit } from "../../../lib/rateLimit";
+
+export default requireAuth(async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).end();
+
+  try {
+    const rl = await checkRateLimit(req, res, "resend-verification", 3, 600); // 3 / 10 min / IP
+    if (!rl.allowed) return;
+
+    const author = await prisma.author.findUnique({ where: { id: req.authorId } });
+    if (author.emailVerified) return res.status(200).json({ ok: true, alreadyVerified: true });
+
+    const verifyToken = signToken({ authorId: author.id, purpose: "verify_email" }, "1d");
+    const verifyUrl = `${process.env.APP_URL}/api/auth/verify-email?token=${verifyToken}`;
+    const result = await sendVerificationEmail({ to: author.email, verifyUrl });
+
+    return res.status(200).json({ sent: result.sent });
+  } catch (error) {
+    console.error("Erreur /api/auth/resend-verification :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
+});
+FILE_EOF_MARKER
+
+mkdir -p "$(dirname "pages/api/authors/payment-config.js")"
+cat > "pages/api/authors/payment-config.js" << 'FILE_EOF_MARKER'
+import { requireAuth } from "../../../lib/auth";
+import { prisma } from "../../../lib/db";
+
+// GET  -> retourne l'état de configuration des moyens de paiement de l'auteur
+// PUT  -> enregistre le numéro Mobile Money (zone Afrique)
+// La connexion Stripe (zone Europe) passe par /api/stripe/connect/onboarding,
+// pas par cette route, car elle nécessite une redirection OAuth.
+export default requireAuth(async function handler(req, res) {
+  try {
+    if (req.method === "GET") {
+      const author = await prisma.author.findUnique({
+        where: { id: req.authorId },
+        select: { region: true, stripeAccountId: true, stripeOnboarded: true, momoOperator: true, momoNumber: true },
+      });
+      return res.status(200).json(author);
+    }
+
+    if (req.method === "PUT") {
+      const { momoOperator, momoNumber } = req.body;
+      if (!momoOperator || !momoNumber) {
+        return res.status(400).json({ error: "Opérateur et numéro Mobile Money requis" });
+      }
+      await prisma.author.update({
+        where: { id: req.authorId },
+        data: { momoOperator, momoNumber },
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    return res.status(405).end();
+  } catch (error) {
+    console.error("Erreur /api/authors/payment-config :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
+});
+FILE_EOF_MARKER
+
+mkdir -p "$(dirname "pages/api/stripe/connect/onboarding.js")"
+cat > "pages/api/stripe/connect/onboarding.js" << 'FILE_EOF_MARKER'
+import { requireAuth } from "../../../../lib/auth";
+import { prisma } from "../../../../lib/db";
+import { stripe } from "../../../../lib/stripe";
+
+// Crée (si besoin) le compte Stripe Connect Express de l'auteur puis
+// retourne un lien d'onboarding hébergé par Stripe. Le frontend doit
+// rediriger l'auteur vers cette URL — jamais de clé secrète échangée ici.
+export default requireAuth(async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).end();
+
+  try {
+    let author = await prisma.author.findUnique({ where: { id: req.authorId } });
+
+    if (!author.stripeAccountId) {
+      const account = await stripe.accounts.create({
+        type: "express",
+        email: author.email,
+        capabilities: {
+          transfers: { requested: true },
+          card_payments: { requested: true },
+        },
+      });
+      author = await prisma.author.update({
+        where: { id: author.id },
+        data: { stripeAccountId: account.id },
+      });
+    }
+
+    const accountLink = await stripe.accountLinks.create({
+      account: author.stripeAccountId,
+      refresh_url: `${process.env.APP_URL}/dashboard/paiements?stripe=refresh`,
+      return_url: `${process.env.APP_URL}/dashboard/paiements?stripe=retour`,
+      type: "account_onboarding",
+    });
+
+    return res.status(200).json({ url: accountLink.url });
+  } catch (error) {
+    console.error("Erreur /api/stripe/connect/onboarding :", error);
+    return res.status(500).json({ error: error.message || "Erreur serveur inattendue." });
+  }
+});
+FILE_EOF_MARKER
+
+mkdir -p "$(dirname "pages/dashboard/parametres.js")"
+cat > "pages/dashboard/parametres.js" << 'FILE_EOF_MARKER'
 import { useState } from "react";
 import { Mail, Check, AlertTriangle, Loader2, Smartphone, CreditCard, ShieldCheck } from "lucide-react";
 import DashboardShell from "../../components/DashboardShell";
@@ -238,3 +358,6 @@ export default function DashboardParametres() {
     </DashboardShell>
   );
 }
+FILE_EOF_MARKER
+
+echo "Terminé."
