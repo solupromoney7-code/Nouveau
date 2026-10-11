@@ -160,8 +160,8 @@ export default function Home() {
         </h2>
         <div className="grid sm:grid-cols-2 gap-5">
           {[
-            { zone: "Afrique francophone", price: "3 000 FCFA", pay: "Mobile Money", accent: colors.gold },
-            { zone: "France / Europe", price: "15 €", pay: "Carte bancaire", accent: colors.sky },
+            { zone: "Afrique francophone", price: "3 900 FCFA", pay: "Mobile Money", accent: colors.gold },
+            { zone: "France / Europe", price: "5,99 €", pay: "Carte bancaire", accent: colors.sky },
           ].map((p) => (
             <div key={p.zone} className="rounded-2xl overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 8px 24px -12px rgba(28,32,51,0.12)" }}>
               <div style={{ height: 5, backgroundColor: p.accent }} />
