@@ -1,5 +1,6 @@
 import { prisma } from "../../../lib/db";
 import { sendMarketingEmail } from "../../../lib/email";
+import { sendWhatsAppMessage } from "../../../lib/whatsapp";
 import { renderTemplate } from "../../../lib/sequences";
 import { isSubscriptionActive } from "../../../lib/subscription";
 
@@ -21,6 +22,7 @@ export default async function handler(req, res) {
   }
 
   let sequenceEmailsSent = 0;
+  let sequenceWhatsAppSent = 0;
   let broadcastsSent = 0;
   let skippedInactiveSubscription = 0;
 
@@ -81,7 +83,66 @@ export default async function handler(req, res) {
     }
   }
 
-  // --- 2. Broadcasts programmés ---
+  // --- 2. Tunnels automatiques WhatsApp — même logique que les tunnels
+  // email ci-dessus, canal séparé (voir lib/whatsapp.js). N'envoie rien si
+  // WHATSAPP_ACCESS_TOKEN/WHATSAPP_PHONE_NUMBER_ID ne sont pas configurés
+  // (sendWhatsAppMessage renvoie simplement { sent: false }).
+  const whatsAppSequences = await prisma.whatsAppSequence.findMany({
+    where: { active: true },
+    include: {
+      steps: { orderBy: { order: "asc" } },
+      author: { select: { id: true, name: true, region: true, subscriptionStatus: true, trialEndsAt: true } },
+    },
+  });
+
+  for (const sequence of whatsAppSequences) {
+    if (!isSubscriptionActive(sequence.author)) {
+      skippedInactiveSubscription += 1;
+      continue;
+    }
+
+    const leads = await prisma.lead.findMany({
+      where: { authorId: sequence.authorId, source: sequence.listSource },
+      include: { book: { include: { salesPage: true } } },
+    });
+
+    for (const lead of leads) {
+      if (!lead.whatsapp) continue;
+
+      const alreadySent = await prisma.whatsAppSend.findMany({
+        where: { leadId: lead.id, sequenceStep: { sequenceId: sequence.id } },
+        select: { sequenceStepId: true },
+      });
+      const sentStepIds = new Set(alreadySent.map((s) => s.sequenceStepId));
+
+      const nextStep = sequence.steps.find((s) => !sentStepIds.has(s.id));
+      if (!nextStep) continue;
+
+      const dueAt = new Date(lead.createdAt.getTime() + nextStep.delayDays * 24 * 60 * 60 * 1000);
+      if (dueAt > new Date()) continue;
+
+      const appUrl = process.env.APP_URL || "";
+      const vars = {
+        prenom: lead.firstName || "",
+        titre: lead.book?.title || "",
+        auteur: sequence.author.name,
+        lien_achat: lead.book?.salesPage ? `${appUrl}/p/${lead.book.salesPage.slug}` : "",
+        lien_boutique: `${appUrl}/boutique/${sequence.authorId}`,
+      };
+
+      const result = await sendWhatsAppMessage({
+        to: lead.whatsapp,
+        bodyText: renderTemplate(nextStep.body, vars),
+      });
+
+      if (result.sent) {
+        await prisma.whatsAppSend.create({ data: { leadId: lead.id, sequenceStepId: nextStep.id } });
+        sequenceWhatsAppSent += 1;
+      }
+    }
+  }
+
+  // --- 3. Broadcasts programmés ---
   const dueBroadcasts = await prisma.broadcast.findMany({
     where: { status: "scheduled", scheduledAt: { lte: new Date() } },
     include: { author: true },
@@ -115,5 +176,5 @@ export default async function handler(req, res) {
     });
   }
 
-  return res.status(200).json({ sequenceEmailsSent, broadcastsSent, skippedInactiveSubscription });
+  return res.status(200).json({ sequenceEmailsSent, sequenceWhatsAppSent, broadcastsSent, skippedInactiveSubscription });
 }

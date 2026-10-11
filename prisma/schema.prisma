@@ -56,6 +56,7 @@ model Author {
   purchases          Purchase[]
   payouts            Payout[]
   emailSequences     EmailSequence[]
+  whatsAppSequences  WhatsAppSequence[]
   broadcasts         Broadcast[]
 }
 
@@ -111,7 +112,8 @@ model Lead {
   source     String   // "extrait" | "acheteur"
   createdAt  DateTime @default(now())
 
-  emailSends EmailSend[]
+  emailSends    EmailSend[]
+  whatsAppSends WhatsAppSend[]
 }
 
 model Purchase {
@@ -200,6 +202,52 @@ model EmailSend {
   sequenceStepId String
   sequenceStep   EmailSequenceStep @relation(fields: [sequenceStepId], references: [id])
   sentAt         DateTime          @default(now())
+
+  @@unique([leadId, sequenceStepId])
+}
+
+// Même principe que EmailSequence / EmailSequenceStep / EmailSend ci-dessus,
+// mais pour le canal WhatsApp (voir lib/whatsapp.js). Un auteur a aussi
+// exactement 2 séquences WhatsApp (une par liste), créées automatiquement
+// avec un contenu par défaut dès sa première visite de l'onglet Tunnels —
+// voir lib/whatsappSequences.js.
+model WhatsAppSequence {
+  id         String   @id @default(cuid())
+  authorId   String
+  author     Author   @relation(fields: [authorId], references: [id])
+  listSource String   // "extrait" | "acheteur"
+  name       String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  steps      WhatsAppSequenceStep[]
+
+  @@unique([authorId, listSource])
+}
+
+model WhatsAppSequenceStep {
+  id         String   @id @default(cuid())
+  sequenceId String
+  sequence   WhatsAppSequence @relation(fields: [sequenceId], references: [id])
+  order      Int
+  delayDays  Int      // jours après l'entrée du contact dans la liste
+  body       String   // texte libre — envoyé comme variable {{1}} du modèle WhatsApp approuvé
+  createdAt  DateTime @default(now())
+
+  sends      WhatsAppSend[]
+
+  @@unique([sequenceId, order])
+}
+
+// Trace un envoi WhatsApp effectué (empêche de renvoyer deux fois la même
+// étape au même contact) — équivalent de EmailSend pour ce canal.
+model WhatsAppSend {
+  id             String               @id @default(cuid())
+  leadId         String
+  lead           Lead                 @relation(fields: [leadId], references: [id])
+  sequenceStepId String
+  sequenceStep   WhatsAppSequenceStep @relation(fields: [sequenceStepId], references: [id])
+  sentAt         DateTime             @default(now())
 
   @@unique([leadId, sequenceStepId])
 }
