@@ -27,8 +27,35 @@ export const inputStyle = {
   border: "none",
 };
 
-export function BookCover({ title, author, size = "md" }) {
-  const dims = size === "sm" ? { w: 88, h: 128 } : { w: 120, h: 172 };
+// Couverture de livre. Si une vraie image a été fournie par l'auteur, elle
+// est affichée en pleine case (comme une vraie couverture de livre). Sinon,
+// une couverture générée (dégradé + titre + auteur) sert de solution de
+// repli élégante.
+export function BookCover({ title, author, imageUrl, size = "md" }) {
+  const dims =
+    size === "sm" ? { w: 88, h: 128 } : size === "lg" ? { w: 160, h: 230 } : { w: 120, h: 172 };
+
+  if (imageUrl) {
+    return (
+      <div
+        className="shrink-0 rounded-md overflow-hidden shadow-lg"
+        style={{
+          width: dims.w,
+          height: dims.h,
+          border: "1px solid rgba(28,32,51,0.12)",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={title}
+          className="w-full h-full object-cover"
+          style={{ display: "block" }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="shrink-0 rounded-md flex flex-col justify-between p-3 shadow-lg"
@@ -47,6 +74,31 @@ export function BookCover({ title, author, size = "md" }) {
         {author}
       </p>
     </div>
+  );
+}
+
+// Champ de texte "cliquer pour modifier" sur une seule ligne — utilisé pour
+// le titre du livre dans le tableau de bord.
+export function EditableTitle({ value, onChange, onBlurExtra, className, style, placeholder }) {
+  return (
+    <input
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      className={className}
+      style={{
+        background: "transparent",
+        border: "none",
+        outline: "none",
+        borderBottom: "1px dashed transparent",
+        ...style,
+      }}
+      onFocus={(e) => { e.target.style.borderBottomColor = colors.gold; }}
+      onBlur={(e) => {
+        e.target.style.borderBottomColor = "transparent";
+        if (onBlurExtra) onBlurExtra();
+      }}
+    />
   );
 }
 

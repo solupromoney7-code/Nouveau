@@ -1,10 +1,32 @@
 import { useState } from "react";
 import { upload } from "@vercel/blob/client";
-import { Upload, Check, Copy, ExternalLink, Loader2, FileText, Video } from "lucide-react";
+import { Upload, Check, Copy, ExternalLink, Loader2, FileText, Video, ImagePlus, Pencil } from "lucide-react";
 import DashboardShell from "../../components/DashboardShell";
-import { colors, ErrorBanner, Spinner } from "../../components/ui";
+import { colors, BookCover, EditableTitle, ErrorBanner, Spinner } from "../../components/ui";
 import { useAuthGuard } from "../../lib/useAuthGuard";
 import { api, getToken } from "../../lib/apiClient";
+
+// Bouton discret posé sur la couverture pour en changer l'image.
+function CoverUploadButton({ uploading, onFile }) {
+  return (
+    <label
+      htmlFor="cover-upload-input-extrait"
+      title="Changer la photo de couverture"
+      className="absolute bottom-1.5 right-1.5 flex items-center justify-center rounded-full cursor-pointer transition-opacity"
+      style={{ width: 28, height: 28, backgroundColor: colors.gold, color: colors.ink, opacity: uploading ? 0.6 : 0.95 }}
+    >
+      <input
+        id="cover-upload-input-extrait"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        disabled={uploading}
+        onChange={onFile}
+      />
+      {uploading ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
+    </label>
+  );
+}
 
 export default function DashboardExtrait() {
   const { author, loading: authLoading } = useAuthGuard();
@@ -19,6 +41,8 @@ export default function DashboardExtrait() {
   const [videoUrl, setVideoUrl] = useState("");
   const [extractPage, setExtractPage] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [titleSaving, setTitleSaving] = useState(false);
 
   async function handleBookFile(e) {
     const file = e.target.files?.[0];
@@ -81,6 +105,49 @@ export default function DashboardExtrait() {
     } catch (err) {
       setError(err.message);
       setStage("idle");
+    }
+  }
+
+  async function handleCoverFile(e) {
+    const file = e.target.files?.[0];
+    if (!file || !book) return;
+    setError("");
+    setCoverUploading(true);
+    try {
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/books/upload-cover",
+        clientPayload: JSON.stringify({ token: getToken() }),
+      });
+      const updated = await api(`/api/books/${book.id}`, {
+        method: "PATCH",
+        body: { coverImageUrl: blob.url },
+      });
+      setBook(updated);
+    } catch (err) {
+      setError(err.message || "Échec de l’envoi de l’image");
+    } finally {
+      setCoverUploading(false);
+    }
+  }
+
+  function handleTitleChange(value) {
+    setBook((b) => ({ ...b, title: value }));
+  }
+
+  async function handleTitleSave() {
+    if (!book) return;
+    setTitleSaving(true);
+    try {
+      const updated = await api(`/api/books/${book.id}`, {
+        method: "PATCH",
+        body: { title: book.title },
+      });
+      setBook(updated);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTitleSaving(false);
     }
   }
 
@@ -185,6 +252,30 @@ export default function DashboardExtrait() {
               </>
             )}
           </label>
+
+          {book && (
+            <div className="flex items-center gap-4 mt-6">
+              <div className="relative shrink-0">
+                <BookCover title={book.title} author={author?.name || ""} imageUrl={book.coverImageUrl} size="sm" />
+                <CoverUploadButton uploading={coverUploading} onFile={handleCoverFile} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-mono text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.textPaperDim }}>
+                  Titre affiché
+                </p>
+                <div className="flex items-center gap-2">
+                  <EditableTitle
+                    value={book.title}
+                    onChange={handleTitleChange}
+                    onBlurExtra={handleTitleSave}
+                    className="font-display text-lg flex-1 min-w-0"
+                    style={{ color: colors.textPaper }}
+                  />
+                  {titleSaving ? <Spinner size={13} color={colors.goldDark} /> : <Pencil size={13} color={colors.mist} />}
+                </div>
+              </div>
+            </div>
+          )}
 
           {book && (
             <>

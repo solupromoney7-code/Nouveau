@@ -61,12 +61,13 @@ model Author {
 }
 
 model Book {
-  id          String        @id @default(cuid())
-  authorId    String
-  author      Author        @relation(fields: [authorId], references: [id])
-  title       String
-  fileUrl     String
-  createdAt   DateTime      @default(now())
+  id            String        @id @default(cuid())
+  authorId      String
+  author        Author        @relation(fields: [authorId], references: [id])
+  title         String
+  fileUrl       String
+  coverImageUrl String?
+  createdAt     DateTime      @default(now())
 
   salesPage   SalesPage?
   extractPage ExtractPage?

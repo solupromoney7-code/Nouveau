@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BookOpen, Download, Loader2, Mail } from "lucide-react";
 import { prisma } from "../../lib/db";
 import { colors, BookCover, ErrorBanner } from "../../components/ui";
+import PublicFooter from "../../components/PublicFooter";
 import { COUNTRY_CODES, getVisitorCountryCode } from "../../lib/countryCodes";
 
 function getEmbedUrl(url) {
@@ -42,6 +43,7 @@ export async function getServerSideProps({ params, req }) {
     props: {
       page: {
         title: extractPage.book.title,
+        coverImageUrl: extractPage.book.coverImageUrl || "",
         authorName: extractPage.book.author.name,
         slug: extractPage.slug,
         embedUrl: getEmbedUrl(extractPage.videoUrl) || "",
@@ -121,7 +123,7 @@ export default function PublicExtractPage({ page }) {
 
       <main className="max-w-2xl mx-auto px-5 pb-24">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 py-8 text-center sm:text-left">
-          <BookCover title={page.title} author={page.authorName} />
+          <BookCover title={page.title} author={page.authorName} imageUrl={page.coverImageUrl} />
           <div>
             <p className="font-mono text-[11px] uppercase tracking-widest mb-2" style={{ color: colors.goldDark }}>
               Extrait gratuit
@@ -252,6 +254,7 @@ export default function PublicExtractPage({ page }) {
           </div>
         )}
       </main>
+      <PublicFooter />
     </div>
   );
 }

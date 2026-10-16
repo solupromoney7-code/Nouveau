@@ -1,5 +1,6 @@
 import { requireAuth } from "../../../lib/auth";
 import { prisma } from "../../../lib/db";
+import { humanizeTitle } from "../../../lib/text";
 
 // Finalise l'upload "client" du livre (voir /api/books/upload) : le fichier
 // est déjà sur Vercel Blob à ce stade, cette route ne fait qu'enregistrer sa
@@ -19,11 +20,15 @@ export default requireAuth(async function handler(req, res) {
   }
 
   const cleanName = String(filename).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 150);
+  // Le nom de fichier brut (souvent plein d'underscores/majuscules) est
+  // automatiquement mis en forme pour donner un titre présentable par
+  // défaut ; l'auteur peut ensuite le modifier depuis le tableau de bord.
+  const title = humanizeTitle(cleanName.replace(/\.[^/.]+$/, ""));
 
   const book = await prisma.book.create({
     data: {
       authorId: req.authorId,
-      title: cleanName.replace(/\.[^/.]+$/, ""),
+      title,
       fileUrl: url,
     },
   });

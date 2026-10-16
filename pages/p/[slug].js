@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BookOpen, Smartphone, CreditCard, Loader2, Truck } from "lucide-react";
 import { prisma } from "../../lib/db";
 import { colors, BookCover, ErrorBanner } from "../../components/ui";
+import PublicFooter from "../../components/PublicFooter";
 import { COUNTRY_CODES, getVisitorCountryCode } from "../../lib/countryCodes";
 
 export async function getServerSideProps({ params, req }) {
@@ -20,6 +21,7 @@ export async function getServerSideProps({ params, req }) {
     props: {
       page: {
         title: salesPage.book.title,
+        coverImageUrl: salesPage.book.coverImageUrl || "",
         authorName: salesPage.book.author.name,
         problem: salesPage.problem,
         why: salesPage.why,
@@ -117,7 +119,7 @@ export default function PublicSalesPage({ page }) {
 
       <main className="max-w-3xl mx-auto px-5 pb-24">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 py-8 text-center sm:text-left">
-          <BookCover title={page.title} author={page.authorName} />
+          <BookCover title={page.title} author={page.authorName} imageUrl={page.coverImageUrl} />
           <div>
             <p className="font-mono text-[11px] uppercase tracking-widest mb-2" style={{ color: colors.goldDark }}>
               Livre de {page.authorName}
@@ -265,6 +267,7 @@ export default function PublicSalesPage({ page }) {
           </form>
         )}
       </main>
+      <PublicFooter />
     </div>
   );
 }

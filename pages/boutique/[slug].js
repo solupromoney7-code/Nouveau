@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import { prisma } from "../../lib/db";
 import { colors, BookCover } from "../../components/ui";
+import PublicFooter from "../../components/PublicFooter";
 
 export async function getServerSideProps({ params }) {
   const author = await prisma.author.findUnique({
@@ -22,6 +23,7 @@ export async function getServerSideProps({ params }) {
     .map((b) => ({
       id: b.id,
       title: b.title,
+      coverImageUrl: b.coverImageUrl || "",
       slug: b.salesPage.slug,
       priceCents: b.salesPage.priceCents,
       currency: b.salesPage.currency,
@@ -70,7 +72,7 @@ export default function PublicStorePage({ authorName, books }) {
                 className="rounded-2xl p-6 flex flex-col items-center text-center gap-4 transition-transform hover:-translate-y-0.5"
                 style={{ backgroundColor: "#FFFFFF", boxShadow: "0 8px 24px -12px rgba(28,32,51,0.12)" }}
               >
-                <BookCover title={book.title} author={authorName} />
+                <BookCover title={book.title} author={authorName} imageUrl={book.coverImageUrl} size="lg" />
                 <div>
                   <p className="font-display text-base mb-1" style={{ color: colors.textPaper }}>{book.title}</p>
                   <p className="font-body text-sm font-semibold" style={{ color: colors.goldDark }}>
@@ -82,6 +84,7 @@ export default function PublicStorePage({ authorName, books }) {
           </div>
         )}
       </main>
+      <PublicFooter />
     </div>
   );
 }

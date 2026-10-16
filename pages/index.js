@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpen, Sparkles, Upload, Wallet, ArrowRight, Check } from "lucide-react";
 import { colors, BookCover } from "../components/ui";
+import Footer from "../components/Footer";
 
 function MockSalesCard() {
   return (
@@ -126,7 +127,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-5 pb-20" style={{ backgroundColor: colors.bgLightAlt }}>
+      <section id="produit" className="px-5 pb-20" style={{ backgroundColor: colors.bgLightAlt }}>
         <div className="max-w-4xl mx-auto pt-16">
           <p className="font-mono text-[11px] uppercase tracking-widest mb-2 text-center" style={{ color: colors.goldDark }}>
             Comment ça marche
@@ -153,7 +154,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="max-w-3xl mx-auto px-5 pb-24 pt-20">
+      <section id="tarifs" className="max-w-3xl mx-auto px-5 pb-24 pt-20">
         <p className="font-mono text-[11px] uppercase tracking-widest mb-2 text-center" style={{ color: colors.goldDark }}>Tarifs</p>
         <h2 className="font-display text-2xl md:text-3xl text-center mb-10" style={{ color: colors.textPaper }}>
           Un prix simple, deux zones
@@ -185,19 +186,7 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="border-t px-5 py-8" style={{ borderColor: colors.paperDim }}>
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: colors.gold }}>
-              <BookOpen size={12} color={colors.ink} />
-            </div>
-            <span className="font-display text-sm" style={{ color: colors.textPaper }}>Plume</span>
-          </div>
-          <p className="font-mono text-[11px]" style={{ color: colors.textMutedLight }}>
-            Plateforme de vente pour auteurs indépendants
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

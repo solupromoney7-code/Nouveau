@@ -1,10 +1,33 @@
 import { useState, useRef } from "react";
 import { upload } from "@vercel/blob/client";
-import { Sparkles, Upload, Check, Copy, ExternalLink, Loader2, Smartphone, CreditCard } from "lucide-react";
+import { Sparkles, Upload, Check, Copy, ExternalLink, Loader2, Smartphone, CreditCard, ImagePlus, Pencil } from "lucide-react";
 import DashboardShell from "../../components/DashboardShell";
-import { colors, BookCover, ErrorBanner, Spinner } from "../../components/ui";
+import { colors, BookCover, EditableTitle, ErrorBanner, Spinner } from "../../components/ui";
 import { useAuthGuard } from "../../lib/useAuthGuard";
 import { api, getToken } from "../../lib/apiClient";
+
+// Bouton discret posé sur la couverture pour en changer l'image — réutilisé
+// sur la page de vente et la page d'extrait.
+function CoverUploadButton({ uploading, onFile }) {
+  return (
+    <label
+      htmlFor="cover-upload-input"
+      title="Changer la photo de couverture"
+      className="absolute bottom-1.5 right-1.5 flex items-center justify-center rounded-full cursor-pointer transition-opacity"
+      style={{ width: 28, height: 28, backgroundColor: colors.gold, color: colors.ink, opacity: uploading ? 0.6 : 0.95 }}
+    >
+      <input
+        id="cover-upload-input"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        disabled={uploading}
+        onChange={onFile}
+      />
+      {uploading ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
+    </label>
+  );
+}
 
 function EditableParagraph({ value, onChange }) {
   const [editing, setEditing] = useState(false);
@@ -42,6 +65,8 @@ export default function DashboardVente() {
   const [priceInput, setPriceInput] = useState("12");
   const [copied, setCopied] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [titleSaving, setTitleSaving] = useState(false);
   const fileInputRef = useRef(null);
 
   const currency = author?.region === "EUROPE" ? "EUR" : "XOF";
@@ -116,6 +141,49 @@ export default function DashboardVente() {
       await api(`/api/sales-pages/${salesPage.id}`, { method: "PATCH", body: { [field]: value } });
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  async function handleCoverFile(e) {
+    const file = e.target.files?.[0];
+    if (!file || !book) return;
+    setError("");
+    setCoverUploading(true);
+    try {
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/books/upload-cover",
+        clientPayload: JSON.stringify({ token: getToken() }),
+      });
+      const updated = await api(`/api/books/${book.id}`, {
+        method: "PATCH",
+        body: { coverImageUrl: blob.url },
+      });
+      setBook(updated);
+    } catch (err) {
+      setError(err.message || "Échec de l’envoi de l’image");
+    } finally {
+      setCoverUploading(false);
+    }
+  }
+
+  async function handleTitleChange(value) {
+    setBook((b) => ({ ...b, title: value }));
+  }
+
+  async function handleTitleSave() {
+    if (!book) return;
+    setTitleSaving(true);
+    try {
+      const updated = await api(`/api/books/${book.id}`, {
+        method: "PATCH",
+        body: { title: book.title },
+      });
+      setBook(updated);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTitleSaving(false);
     }
   }
 
@@ -271,9 +339,21 @@ export default function DashboardVente() {
 
               <div className="rounded-2xl p-6 md:p-10" style={{ backgroundColor: colors.paper }}>
                 <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-                  <BookCover title={book?.title || "Votre livre"} author={author?.name || ""} />
+                  <div className="relative shrink-0 mx-auto md:mx-0">
+                    <BookCover title={book?.title || "Votre livre"} author={author?.name || ""} imageUrl={book?.coverImageUrl} />
+                    <CoverUploadButton uploading={coverUploading} onFile={handleCoverFile} />
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <h2 className="font-display text-2xl md:text-3xl mb-6" style={{ color: colors.textPaper }}>{book?.title}</h2>
+                    <div className="flex items-center gap-2 mb-6">
+                      <EditableTitle
+                        value={book?.title || ""}
+                        onChange={handleTitleChange}
+                        onBlurExtra={handleTitleSave}
+                        className="font-display text-2xl md:text-3xl flex-1 min-w-0"
+                        style={{ color: colors.textPaper }}
+                      />
+                      {titleSaving ? <Spinner size={14} color={colors.goldDark} /> : <Pencil size={14} color={colors.mist} />}
+                    </div>
 
                     <p className="font-mono text-[11px] uppercase tracking-widest mb-1" style={{ color: colors.goldDark }}>Le problème</p>
                     <EditableParagraph value={salesPage.problem} onChange={(v) => updateField("problem", v)} />
