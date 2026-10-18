@@ -85,7 +85,7 @@ export default function PublicSalesPage({ page }) {
           shippingCity: form.shippingCity,
           shippingPostalCode: form.shippingPostalCode,
           shippingCountry: form.shippingCountry,
-          website: form.hp,
+          hpField: form.hp,
         }),
       });
       const data = await res.json();
