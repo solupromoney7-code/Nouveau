@@ -123,7 +123,7 @@ export default function PublicExtractPage({ page }) {
 
       <main className="max-w-2xl mx-auto px-5 pb-24">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 py-8 text-center sm:text-left">
-          <BookCover title={page.title} author={page.authorName} imageUrl={page.coverImageUrl} />
+          <BookCover title={page.title} author={page.authorName} imageUrl={page.coverImageUrl} size="hero" />
           <div>
             <p className="font-mono text-[11px] uppercase tracking-widest mb-2" style={{ color: colors.goldDark }}>
               Extrait gratuit
