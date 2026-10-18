@@ -61,6 +61,12 @@ export default function Connexion() {
         style={inputStyle}
       />
 
+      <div className="text-right -mt-1">
+        <Link href="/mot-de-passe-oublie" className="font-mono text-[11px] underline" style={{ color: colors.textPaperDim }}>
+          Mot de passe oublié ?
+        </Link>
+      </div>
+
       <button
         onClick={handleSubmit}
         disabled={loading}

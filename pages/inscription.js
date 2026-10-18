@@ -61,7 +61,8 @@ export default function Inscription() {
       {/* Honeypot anti-bot : invisible pour un humain */}
       <input
         type="text"
-        name="website"
+        name="hp"
+        id="hp-field-signup"
         tabIndex={-1}
         autoComplete="off"
         value={form.website}
@@ -71,6 +72,15 @@ export default function Inscription() {
       />
 
       <ErrorBanner message={error} />
+
+      {error.includes("déjà utilisé") && (
+        <p className="font-body text-xs -mt-1 mb-1" style={{ color: colors.textPaperDim }}>
+          Vous avez déjà un compte avec cet email.{" "}
+          <Link href="/connexion" className="underline font-semibold">Se connecter</Link>
+          {" · "}
+          <Link href="/mot-de-passe-oublie" className="underline font-semibold">Mot de passe oublié ?</Link>
+        </p>
+      )}
 
       <input
         placeholder="Nom et prénom"
