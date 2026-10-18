@@ -64,20 +64,28 @@ export default function PublicStorePage({ authorName, books }) {
             Aucun livre disponible pour le moment — revenez bientôt.
           </p>
         ) : (
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-8">
             {books.map((book) => (
               <Link
                 key={book.id}
                 href={`/p/${book.slug}`}
-                className="rounded-2xl p-6 flex flex-col items-center text-center gap-4 transition-transform hover:-translate-y-0.5"
-                style={{ backgroundColor: "#FFFFFF", boxShadow: "0 8px 24px -12px rgba(28,32,51,0.12)" }}
+                className="group rounded-3xl p-4 sm:p-6 flex flex-col items-center text-center gap-4 transition-all hover:-translate-y-1"
+                style={{ backgroundColor: "#FFFFFF", boxShadow: "0 20px 40px -24px rgba(28,32,51,0.3)" }}
               >
-                <BookCover title={book.title} author={authorName} imageUrl={book.coverImageUrl} size="lg" />
-                <div>
-                  <p className="font-display text-base mb-1" style={{ color: colors.textPaper }}>{book.title}</p>
+                <div className="w-full flex justify-center py-3 rounded-2xl" style={{ backgroundColor: colors.paperDim }}>
+                  <BookCover title={book.title} author={authorName} imageUrl={book.coverImageUrl} size="lg" />
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <p className="font-display text-base sm:text-lg leading-snug" style={{ color: colors.textPaper }}>{book.title}</p>
                   <p className="font-body text-sm font-semibold" style={{ color: colors.goldDark }}>
                     {formatPrice(book.priceCents, book.currency)}
                   </p>
+                  <span
+                    className="font-body text-xs font-semibold px-4 py-2 rounded-full transition-colors"
+                    style={{ backgroundColor: colors.gold, color: colors.ink }}
+                  >
+                    Voir le livre
+                  </span>
                 </div>
               </Link>
             ))}
