@@ -10,12 +10,13 @@ export default requireAdmin(async function handler(req, res) {
 
     const [
       byStatus, suspended, activeByRegion, recentAuthors,
-      leadsBySource, paidAll, paid30, books, salesPublished, extractPages, payoutGroups,
+      lifetimeCount, leadsBySource, paidAll, paid30, books, salesPublished, extractPages, payoutGroups,
     ] = await Promise.all([
       prisma.author.groupBy({ by: ["subscriptionStatus"], _count: { _all: true } }),
       prisma.author.count({ where: { suspended: true } }),
-      prisma.author.groupBy({ by: ["region"], where: { subscriptionStatus: "ACTIVE" }, _count: { _all: true } }),
+      prisma.author.groupBy({ by: ["region"], where: { subscriptionStatus: "ACTIVE", lifetimeAccess: false }, _count: { _all: true } }),
       prisma.author.findMany({ where: { createdAt: { gte: since } }, select: { createdAt: true } }),
+      prisma.author.count({ where: { lifetimeAccess: true } }),
       prisma.lead.groupBy({ by: ["source"], _count: { _all: true } }),
       prisma.purchase.groupBy({ by: ["currency"], where: { status: "paid" }, _sum: { amountCents: true }, _count: { _all: true } }),
       prisma.purchase.groupBy({ by: ["currency"], where: { status: "paid", createdAt: { gte: since } }, _sum: { amountCents: true }, _count: { _all: true } }),
@@ -55,6 +56,7 @@ export default requireAdmin(async function handler(req, res) {
         pastDue: statusCount.PAST_DUE || 0,
         canceled: statusCount.CANCELED || 0,
         suspended,
+        lifetime: lifetimeCount,
         last30: recentAuthors.length,
       },
       signupsByDay: days,

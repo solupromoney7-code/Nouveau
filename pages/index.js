@@ -103,7 +103,7 @@ export default function Home() {
                 Créer ma page de vente <ArrowRight size={16} />
               </Link>
               <p className="font-mono text-[11px]" style={{ color: colors.textMutedLight }}>
-                Essai gratuit 7 jours — sans engagement
+                Essai gratuit 30 jours — sans engagement
               </p>
             </div>
           </div>
@@ -173,7 +173,7 @@ export default function Home() {
                 </p>
                 <p className="font-body text-xs mb-5" style={{ color: colors.textMutedLight }}>Paiement {p.pay}</p>
                 <div className="flex flex-col gap-2">
-                  {["Pages de vente illimitées", "20 contenus réseaux / mois", "Essai gratuit 7 jours"].map((f) => (
+                  {["Pages de vente illimitées", "20 contenus réseaux / mois", "Essai gratuit 30 jours"].map((f) => (
                     <div key={f} className="flex items-center gap-2">
                       <Check size={13} color={colors.sageDark} />
                       <p className="font-body text-xs" style={{ color: colors.textPaper }}>{f}</p>

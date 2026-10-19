@@ -12,7 +12,7 @@ export default requireAdmin(async function handler(req, res) {
         select: {
           id: true, name: true, email: true, emailVerified: true, region: true,
           createdAt: true, subscriptionStatus: true, trialEndsAt: true, currentPeriodEnd: true,
-          suspended: true, suspendedAt: true,
+          suspended: true, suspendedAt: true, lifetimeAccess: true,
           _count: { select: { books: true } },
         },
       }),
@@ -36,6 +36,7 @@ export default requireAdmin(async function handler(req, res) {
       subscriptionStatus: a.subscriptionStatus,
       trialEndsAt: a.trialEndsAt,
       currentPeriodEnd: a.currentPeriodEnd,
+      lifetimeAccess: a.lifetimeAccess,
       suspended: a.suspended,
       suspendedAt: a.suspendedAt,
       isAdmin: isAdminAuthor(a),

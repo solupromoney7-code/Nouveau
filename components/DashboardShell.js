@@ -87,7 +87,7 @@ export default function DashboardShell({ active, author, children }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm truncate" style={{ color: colors.paper }}>{author?.name || "…"}</p>
             <p className="font-mono text-[10px]" style={{ color: colors.mist }}>
-              {author?.subscriptionStatus === "TRIALING" ? "Essai gratuit" : author?.subscriptionStatus === "ACTIVE" ? "Abonnement actif" : "Abonnement inactif"}
+              {author?.lifetimeAccess ? "Accès à vie" : author?.subscriptionStatus === "TRIALING" ? "Essai gratuit" : author?.subscriptionStatus === "ACTIVE" ? "Abonnement actif" : "Abonnement inactif"}
             </p>
           </div>
           <button onClick={handleLogout} title="Se déconnecter">

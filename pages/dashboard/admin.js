@@ -147,7 +147,7 @@ function Overview({ data }) {
         <Stat icon={Users} label="Auteurs inscrits" value={a.total} sub={`+${a.last30} ces 30 jours`} />
         <Stat icon={ShieldCheck} label="Abonnés actifs" value={a.active} sub={`${a.trialing} en essai · ${a.pastDue} impayé · ${a.canceled} annulé`} />
         <Stat icon={TrendingUp} label="Revenu mensuel récurrent" value={mrrText} sub="Abonnements Plume actifs" />
-        <Stat icon={ShieldAlert} label="Comptes suspendus" value={a.suspended} />
+        <Stat icon={ShieldAlert} label="Comptes suspendus" value={a.suspended} sub={`${a.lifetime} accès à vie offerts`} />
         <Stat icon={Wallet} label="Ventes de livres (total)" value={fmtMoneyList(data.sales.total)} sub={`${data.sales.total.reduce((n, s) => n + s.count, 0)} commandes payées`} />
         <Stat icon={Wallet} label="Ventes (30 jours)" value={fmtMoneyList(data.sales.last30)} sub={`${data.sales.last30.reduce((n, s) => n + s.count, 0)} commandes`} />
         <Stat icon={Mail} label="Contacts d’extrait" value={data.contacts.extract} sub={`${data.contacts.buyers} contacts acheteurs`} />
@@ -233,6 +233,24 @@ export default function DashboardAdmin() {
     }
   }
 
+  async function toggleLifetime(a) {
+    const next = !a.lifetimeAccess;
+    const msg = next
+      ? `Offrir un abonnement à vie à ${a.name} (${a.email}) ?\n\nCet auteur aura accès à toutes les fonctionnalités sans jamais payer d’abonnement.`
+      : `Retirer l’accès à vie de ${a.name} ?\n\nSon abonnement redeviendra celui de son compte (essai ou abonnement payant).`;
+    if (!window.confirm(msg)) return;
+    setBusyId(a.id);
+    setError("");
+    try {
+      await api(`/api/admin/authors/${a.id}`, { method: "PATCH", body: { lifetime: next } });
+      await load("authors");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId("");
+    }
+  }
+
   const colsAuthors = [
     { label: "Auteur", key: "name", render: (r) => (<><span className="font-semibold">{r.name}</span><br /><span className="text-[11px]" style={{ color: colors.textPaperDim }}>{r.email}</span></>), csv: (r) => r.name },
     { label: "Email", key: "email", render: () => null, csv: (r) => r.email, hidden: true },
@@ -241,10 +259,11 @@ export default function DashboardAdmin() {
     {
       label: "Abonnement", key: "subscriptionStatus",
       render: (r) => {
+        if (r.lifetimeAccess) return <Badge bg="rgba(201,162,39,0.28)" fg="#7A5E0B">À vie</Badge>;
         const s = SUB_LABELS[r.subscriptionStatus] || SUB_LABELS.TRIALING;
         return <Badge bg={s.bg} fg={s.fg}>{s.label}</Badge>;
       },
-      csv: (r) => (SUB_LABELS[r.subscriptionStatus] || {}).label,
+      csv: (r) => (r.lifetimeAccess ? "À vie" : (SUB_LABELS[r.subscriptionStatus] || {}).label),
     },
     { label: "Email vérifié", key: "emailVerified", render: (r) => (r.emailVerified ? "Oui" : "Non"), csv: (r) => (r.emailVerified ? "Oui" : "Non") },
     { label: "Livres", key: "books" },
@@ -334,18 +353,28 @@ export default function DashboardAdmin() {
               searchKeys={["name", "email"]}
               csvName="auteurs-plume.csv"
               empty="Aucun auteur."
-              extra={(r) =>
-                r.isAdmin ? null : (
+              extra={(r) => (
+                <div className="flex items-center justify-end gap-2">
                   <button
                     disabled={busyId === r.id}
-                    onClick={() => toggleSuspend(r)}
+                    onClick={() => toggleLifetime(r)}
                     className="font-body text-xs px-3 py-1.5 rounded-lg"
-                    style={r.suspended ? { backgroundColor: colors.forest, color: colors.paper } : { color: colors.wine, border: `1px solid ${colors.wine}` }}
+                    style={r.lifetimeAccess ? { color: colors.textPaperDim, border: `1px solid ${colors.mist}` } : { backgroundColor: colors.gold, color: colors.ink }}
                   >
-                    {r.suspended ? "Réactiver" : "Suspendre"}
+                    {r.lifetimeAccess ? "Retirer l’accès à vie" : "Offrir à vie"}
                   </button>
-                )
-              }
+                  {!r.isAdmin && (
+                    <button
+                      disabled={busyId === r.id}
+                      onClick={() => toggleSuspend(r)}
+                      className="font-body text-xs px-3 py-1.5 rounded-lg"
+                      style={r.suspended ? { backgroundColor: colors.forest, color: colors.paper } : { color: colors.wine, border: `1px solid ${colors.wine}` }}
+                    >
+                      {r.suspended ? "Réactiver" : "Suspendre"}
+                    </button>
+                  )}
+                </div>
+              )}
             />
           ) : tab === "buyers" ? (
             <DataTable title="Acheteurs" rows={current} columns={colsBuyers} searchKeys={["buyerName", "buyerEmail", "bookTitle", "authorName"]} csvName="acheteurs-plume.csv" empty="Aucun acheteur pour l’instant." />

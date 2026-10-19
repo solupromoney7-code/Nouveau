@@ -52,6 +52,9 @@ model Author {
   storeSlug          String?             @unique
 
   // Suspension par le propriétaire de la plateforme (espace Administration)
+  // Accès offert à vie par le propriétaire (aucun abonnement à payer)
+  lifetimeAccess     Boolean             @default(false)
+
   suspended          Boolean             @default(false)
   suspendedAt        DateTime?
 

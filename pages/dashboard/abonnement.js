@@ -6,7 +6,7 @@ import { colors, ErrorBanner, Spinner } from "../../components/ui";
 import { useAuthGuard } from "../../lib/useAuthGuard";
 import { api } from "../../lib/apiClient";
 
-const FEATURES = ["Pages de vente illimitées", "20 contenus réseaux / mois", "Essai gratuit 7 jours"];
+const FEATURES = ["Pages de vente illimitées", "20 contenus réseaux / mois", "Essai gratuit 30 jours"];
 
 function daysLeft(date) {
   if (!date) return 0;
@@ -16,6 +16,15 @@ function daysLeft(date) {
 
 function StatusBadge({ author }) {
   const status = author?.subscriptionStatus;
+
+  if (author?.lifetimeAccess) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg w-fit" style={{ backgroundColor: "rgba(79,122,92,0.12)" }}>
+        <Check size={14} color={colors.forest} />
+        <span className="font-body text-sm" style={{ color: colors.forest }}>Accès à vie — aucun abonnement à payer</span>
+      </div>
+    );
+  }
 
   if (status === "ACTIVE") {
     return (
@@ -96,8 +105,11 @@ export default function DashboardAbonnement() {
   const isAfrique = author?.region === "AFRIQUE";
   const price = isAfrique ? "3 900 FCFA" : "5,99 €";
   const payMethod = isAfrique ? "Mobile Money" : "Carte bancaire";
-  const active = author?.subscriptionStatus === "ACTIVE";
-  const ctaLabel = active
+  const lifetime = Boolean(author?.lifetimeAccess);
+  const active = author?.subscriptionStatus === "ACTIVE" || lifetime;
+  const ctaLabel = lifetime
+    ? "Accès à vie"
+    : active
     ? "Abonnement actif"
     : author?.subscriptionStatus === "PAST_DUE"
     ? "Régulariser mon paiement"

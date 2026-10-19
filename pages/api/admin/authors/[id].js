@@ -9,8 +9,20 @@ export default requireAdmin(async function handler(req, res) {
 
   try {
     const { id } = req.query;
+    // Accès à vie : offrir ou retirer (aucun abonnement à payer)
+    if (typeof req.body?.lifetime === "boolean") {
+      const exists = await prisma.author.findUnique({ where: { id }, select: { id: true } });
+      if (!exists) return res.status(404).json({ error: "Auteur introuvable" });
+      const updated = await prisma.author.update({
+        where: { id },
+        data: { lifetimeAccess: req.body.lifetime },
+        select: { id: true, lifetimeAccess: true },
+      });
+      return res.status(200).json(updated);
+    }
+
     if (typeof req.body?.suspended !== "boolean") {
-      return res.status(400).json({ error: "Paramètre « suspended » requis." });
+      return res.status(400).json({ error: "Paramètre « suspended » ou « lifetime » requis." });
     }
 
     const target = await prisma.author.findUnique({

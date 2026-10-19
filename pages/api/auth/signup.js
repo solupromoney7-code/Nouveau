@@ -37,7 +37,7 @@ export default async function handler(req, res) {
   if (existing) return res.status(409).json({ error: "Cet email est déjà utilisé" });
 
   const passwordHash = await hashPassword(password);
-  const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // essai gratuit 7 jours
+  const trialEndsAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // essai gratuit 30 jours
 
   const author = await prisma.author.create({
     data: {

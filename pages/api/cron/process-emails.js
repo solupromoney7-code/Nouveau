@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     where: { active: true },
     include: {
       steps: { orderBy: { order: "asc" } },
-      author: { select: { id: true, name: true, region: true, subscriptionStatus: true, trialEndsAt: true } },
+      author: { select: { id: true, name: true, region: true, subscriptionStatus: true, trialEndsAt: true, lifetimeAccess: true } },
     },
   });
 
@@ -91,7 +91,7 @@ export default async function handler(req, res) {
     where: { active: true },
     include: {
       steps: { orderBy: { order: "asc" } },
-      author: { select: { id: true, name: true, region: true, subscriptionStatus: true, trialEndsAt: true } },
+      author: { select: { id: true, name: true, region: true, subscriptionStatus: true, trialEndsAt: true, lifetimeAccess: true } },
     },
   });
 

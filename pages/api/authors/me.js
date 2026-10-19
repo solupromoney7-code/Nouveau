@@ -9,7 +9,7 @@ export default requireAuth(async function handler(req, res) {
     where: { id: req.authorId },
     select: {
       id: true, name: true, email: true, region: true, emailVerified: true,
-      subscriptionStatus: true, trialEndsAt: true, currentPeriodEnd: true,
+      subscriptionStatus: true, lifetimeAccess: true, trialEndsAt: true, currentPeriodEnd: true,
       stripeAccountId: true, stripeOnboarded: true,
       momoOperator: true, momoNumber: true,
     },

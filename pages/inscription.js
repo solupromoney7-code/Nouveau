@@ -51,7 +51,7 @@ export default function Inscription() {
   return (
     <AuthShell
       title="Créer votre compte"
-      subtitle="7 jours d’essai gratuit, sans carte requise pour découvrir."
+      subtitle="30 jours d’essai gratuit, sans carte requise pour découvrir."
       footer={
         <Link href="/connexion" className="font-mono text-[11px] underline" style={{ color: colors.textPaperDim }}>
           Déjà un compte ? Se connecter
