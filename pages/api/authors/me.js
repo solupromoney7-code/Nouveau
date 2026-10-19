@@ -1,5 +1,6 @@
 import { requireAuth } from "../../../lib/auth";
 import { prisma } from "../../../lib/db";
+import { isAdminAuthor } from "../../../lib/admin";
 
 export default requireAuth(async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).end();
@@ -13,5 +14,5 @@ export default requireAuth(async function handler(req, res) {
       momoOperator: true, momoNumber: true,
     },
   });
-  return res.status(200).json(author);
+  return res.status(200).json({ ...author, isAdmin: isAdminAuthor(author) });
 });

@@ -32,9 +32,9 @@ export default async function handler(req, res) {
 
   const extractPage = await prisma.extractPage.findUnique({
     where: { slug },
-    include: { book: true },
+    include: { book: { include: { author: { select: { suspended: true } } } } },
   });
-  if (!extractPage) return res.status(404).json({ error: "Page introuvable" });
+  if (!extractPage || extractPage.book.author?.suspended) return res.status(404).json({ error: "Page introuvable" });
 
   await prisma.lead.create({
     data: {

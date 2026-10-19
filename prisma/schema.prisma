@@ -51,6 +51,10 @@ model Author {
   // Vitrine publique listant tous les livres publiés de l'auteur (Ma boutique)
   storeSlug          String?             @unique
 
+  // Suspension par le propriétaire de la plateforme (espace Administration)
+  suspended          Boolean             @default(false)
+  suspendedAt        DateTime?
+
   books              Book[]
   leads              Lead[]
   purchases          Purchase[]

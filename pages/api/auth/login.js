@@ -15,6 +15,10 @@ export default async function handler(req, res) {
   const valid = await verifyPassword(password, author.passwordHash);
   if (!valid) return res.status(401).json({ error: "Identifiants invalides" });
 
+  if (author.suspended) {
+    return res.status(403).json({ error: "Ce compte est suspendu. Contactez le support." });
+  }
+
   const token = signToken({ authorId: author.id });
   return res.status(200).json({
     token,

@@ -13,7 +13,7 @@ export async function getServerSideProps({ params, req }) {
     include: { book: { include: { author: true } } },
   });
 
-  if (!salesPage || !salesPage.published) {
+  if (!salesPage || !salesPage.published || salesPage.book.author.suspended) {
     return { notFound: true };
   }
 

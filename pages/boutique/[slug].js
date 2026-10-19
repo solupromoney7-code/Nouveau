@@ -16,7 +16,7 @@ export async function getServerSideProps({ params }) {
     },
   });
 
-  if (!author) return { notFound: true };
+  if (!author || author.suspended) return { notFound: true };
 
   const books = author.books
     .filter((b) => b.salesPage?.published)

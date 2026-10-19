@@ -35,7 +35,7 @@ export async function getServerSideProps({ params, req }) {
     include: { book: { include: { author: true } } },
   });
 
-  if (!extractPage) {
+  if (!extractPage || extractPage.book.author.suspended) {
     return { notFound: true };
   }
 

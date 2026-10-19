@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     where: { slug },
     include: { book: { include: { author: true } } },
   });
-  if (!salesPage || !salesPage.published) {
+  if (!salesPage || !salesPage.published || salesPage.book.author.suspended) {
     return res.status(404).json({ error: "Page de vente introuvable ou non publiée" });
   }
 

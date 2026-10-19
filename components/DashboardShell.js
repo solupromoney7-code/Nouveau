@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import {
   BookOpen, FileText, Users, Store, Settings, CreditCard,
-  Sparkles, Wallet, Mail, Lock, LogOut,
+  Sparkles, Wallet, Mail, Lock, LogOut, ShieldCheck,
 } from "lucide-react";
 import { colors } from "./ui";
 import { clearToken } from "../lib/apiClient";
@@ -18,6 +18,9 @@ const NAV_ITEMS = [
   { id: "paiements", label: "Paiements", icon: Wallet, href: "/dashboard/paiements" },
   { id: "abonnement", label: "Abonnement", icon: CreditCard, href: "/dashboard/abonnement" },
 ];
+
+// Visible uniquement pour le propriétaire de la plateforme.
+const ADMIN_ITEM = { id: "admin", label: "Administration", icon: ShieldCheck, href: "/dashboard/admin" };
 
 export default function DashboardShell({ active, author, children }) {
   const router = useRouter();
@@ -48,7 +51,7 @@ export default function DashboardShell({ active, author, children }) {
 
         <div className="relative md:static">
           <nav className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible px-3 pb-3 md:pb-4 no-scrollbar">
-            {NAV_ITEMS.map((item) => {
+            {[...NAV_ITEMS, ...(author?.isAdmin ? [ADMIN_ITEM] : [])].map((item) => {
               const Icon = item.icon;
               const isActive = active === item.id;
               return (
