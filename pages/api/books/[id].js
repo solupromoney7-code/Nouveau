@@ -37,6 +37,26 @@ export default requireAuth(async function handler(req, res) {
       return res.status(200).json(updated);
     }
 
+    // Suppression d'un livre : retire aussi ses pages (extrait et vente).
+    // Les contacts récoltés sont conservés (simplement détachés du livre).
+    // Un livre déjà acheté ne peut pas être supprimé : l'historique des
+    // ventes et des reversements doit rester intact.
+    if (req.method === "DELETE") {
+      const purchases = await prisma.purchase.count({ where: { bookId: id } });
+      if (purchases > 0) {
+        return res.status(409).json({
+          error: "Ce livre a déjà été acheté : il ne peut pas être supprimé. Vous pouvez supprimer sa page d'extrait ou la dépublier.",
+        });
+      }
+      await prisma.$transaction([
+        prisma.lead.updateMany({ where: { bookId: id }, data: { bookId: null } }),
+        prisma.extractPage.deleteMany({ where: { bookId: id } }),
+        prisma.salesPage.deleteMany({ where: { bookId: id } }),
+        prisma.book.delete({ where: { id } }),
+      ]);
+      return res.status(200).json({ ok: true });
+    }
+
     return res.status(405).end();
   } catch (error) {
     console.error("Erreur /api/books/[id] :", error);

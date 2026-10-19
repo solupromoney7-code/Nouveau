@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { upload } from "@vercel/blob/client";
-import { Upload, Check, Copy, ExternalLink, Loader2, FileText, Video, ImagePlus, Pencil } from "lucide-react";
+import { Upload, Check, Copy, ExternalLink, Loader2, FileText, Video, ImagePlus, Pencil, Trash2, Plus, Users } from "lucide-react";
 import DashboardShell from "../../components/DashboardShell";
 import { colors, BookCover, EditableTitle, ErrorBanner, Spinner } from "../../components/ui";
 import { useAuthGuard } from "../../lib/useAuthGuard";
@@ -28,6 +28,87 @@ function CoverUploadButton({ uploading, onFile }) {
   );
 }
 
+// Liste des pages d'extrait déjà créées : lien à copier / ouvrir, et
+// suppression du lien ou du livre.
+function ExtractPagesList({ pages, authorName, busyId, onDeletePage, onDeleteBook }) {
+  const [copiedId, setCopiedId] = useState("");
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  return (
+    <section className="mb-8 max-w-3xl">
+      <p className="font-mono text-[11px] uppercase tracking-widest mb-3" style={{ color: colors.gold }}>
+        Vos pages d’extrait ({pages.length})
+      </p>
+      <div className="space-y-3">
+        {pages.map((pg) => {
+          const url = `${origin}/e/${pg.slug}`;
+          const busy = busyId === pg.id;
+          return (
+            <div
+              key={pg.id}
+              className="rounded-2xl p-4 flex flex-col sm:flex-row gap-4"
+              style={{ backgroundColor: colors.paper, opacity: busy ? 0.5 : 1 }}
+            >
+              <div className="shrink-0 self-start">
+                <BookCover title={pg.book.title} author={authorName} imageUrl={pg.book.coverImageUrl} size="sm" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-display text-lg leading-snug" style={{ color: colors.textPaper }}>{pg.book.title}</p>
+                <p className="font-mono text-[11px] mt-1 flex items-center gap-1.5" style={{ color: colors.textPaperDim }}>
+                  <Users size={12} /> {pg.leadCount} contact{pg.leadCount > 1 ? "s" : ""} récolté{pg.leadCount > 1 ? "s" : ""}
+                </p>
+                <div
+                  className="mt-3 rounded-lg px-3 py-2 font-mono text-[11px] truncate"
+                  style={{ backgroundColor: colors.paperDim, color: colors.textPaperDim }}
+                >
+                  {url}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  <button
+                    onClick={() => { navigator.clipboard?.writeText(url); setCopiedId(pg.id); setTimeout(() => setCopiedId(""), 1500); }}
+                    className="flex items-center gap-1.5 font-body text-xs px-3 py-1.5 rounded-lg"
+                    style={{ backgroundColor: colors.paperDim, color: colors.textPaper }}
+                  >
+                    {copiedId === pg.id ? <Check size={13} /> : <Copy size={13} />} {copiedId === pg.id ? "Copié" : "Copier le lien"}
+                  </button>
+                  <a
+                    href={`/e/${pg.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 font-body text-xs px-3 py-1.5 rounded-lg"
+                    style={{ backgroundColor: colors.gold, color: colors.ink }}
+                  >
+                    <ExternalLink size={13} /> Voir la page
+                  </a>
+                  <span className="flex-1" />
+                  <button
+                    disabled={busy}
+                    onClick={() => onDeletePage(pg)}
+                    className="flex items-center gap-1.5 font-body text-xs px-3 py-1.5 rounded-lg"
+                    style={{ color: colors.wine, border: `1px solid ${colors.wine}` }}
+                    title="Le lien ne fonctionnera plus. Le livre et vos contacts sont conservés."
+                  >
+                    <Trash2 size={13} /> Supprimer le lien
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => onDeleteBook(pg)}
+                    className="flex items-center gap-1.5 font-body text-xs px-3 py-1.5 rounded-lg"
+                    style={{ backgroundColor: colors.wine, color: colors.paper }}
+                    title="Supprime le livre et ses pages."
+                  >
+                    <Trash2 size={13} /> Supprimer le livre
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function DashboardExtrait() {
   const { author, loading: authLoading } = useAuthGuard();
 
@@ -43,6 +124,54 @@ export default function DashboardExtrait() {
   const [copied, setCopied] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [titleSaving, setTitleSaving] = useState(false);
+  const [pages, setPages] = useState([]);
+  const [pagesLoaded, setPagesLoaded] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState("");
+
+  async function loadPages() {
+    try {
+      const data = await api("/api/extract-pages");
+      setPages(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPagesLoaded(true);
+    }
+  }
+
+  useEffect(() => {
+    if (author) loadPages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [author]);
+
+  async function handleDeletePage(pg) {
+    if (!window.confirm(`Supprimer le lien d’extrait de « ${pg.book.title} » ?\n\nLe lien ne fonctionnera plus. Le livre et vos contacts sont conservés.`)) return;
+    setError("");
+    setBusyId(pg.id);
+    try {
+      await api(`/api/extract-pages/${pg.id}`, { method: "DELETE" });
+      await loadPages();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId("");
+    }
+  }
+
+  async function handleDeleteBook(pg) {
+    if (!window.confirm(`Supprimer définitivement le livre « ${pg.book.title} » et ses pages ?\n\nVos contacts déjà récoltés sont conservés.`)) return;
+    setError("");
+    setBusyId(pg.id);
+    try {
+      await api(`/api/books/${pg.book.id}`, { method: "DELETE" });
+      await loadPages();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId("");
+    }
+  }
 
   async function handleBookFile(e) {
     const file = e.target.files?.[0];
@@ -102,6 +231,7 @@ export default function DashboardExtrait() {
       });
       setExtractPage(data);
       setStage("done");
+      loadPages();
     } catch (err) {
       setError(err.message);
       setStage("idle");
@@ -160,6 +290,12 @@ export default function DashboardExtrait() {
     setVideoUrl("");
     setExtractPage(null);
     setError("");
+    setCreating(false);
+  }
+
+  function startNew() {
+    reset();
+    setCreating(true);
   }
 
   const publicUrl = extractPage
@@ -173,9 +309,23 @@ export default function DashboardExtrait() {
         <h1 className="font-display text-2xl md:text-3xl" style={{ color: colors.paper }}>Page d’extrait</h1>
       </header>
 
-      {authLoading ? (
+      {authLoading || !pagesLoaded ? (
         <Spinner color={colors.gold} />
-      ) : stage === "done" && extractPage ? (
+      ) : (
+      <>
+      {pages.length > 0 && (
+        <>
+          {!creating && <ErrorBanner message={error} />}
+          <ExtractPagesList
+            pages={pages}
+            authorName={author?.name || ""}
+            busyId={busyId}
+            onDeletePage={handleDeletePage}
+            onDeleteBook={handleDeleteBook}
+          />
+        </>
+      )}
+      {stage === "done" && extractPage ? (
         <div className="max-w-xl">
           <div
             className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-4 flex-wrap"
@@ -204,12 +354,25 @@ export default function DashboardExtrait() {
               </a>
             </div>
           </div>
-          <button onClick={reset} className="font-body text-xs underline" style={{ color: colors.mist }}>
+          <button onClick={startNew} className="font-body text-xs underline" style={{ color: colors.mist }}>
             Créer une nouvelle page d’extrait
           </button>
         </div>
+      ) : pages.length > 0 && !creating ? (
+        <button
+          onClick={startNew}
+          className="flex items-center gap-2 px-5 py-3 rounded-xl font-body font-semibold text-sm"
+          style={{ backgroundColor: colors.gold, color: colors.ink }}
+        >
+          <Plus size={16} /> Nouvelle page d’extrait
+        </button>
       ) : (
         <div className="rounded-2xl p-6 md:p-10 max-w-xl" style={{ backgroundColor: colors.paper }}>
+          {pages.length > 0 && (
+            <button onClick={reset} className="font-body text-xs underline mb-4 block" style={{ color: colors.textPaperDim }}>
+              ← Retour à mes pages
+            </button>
+          )}
           <p className="font-mono text-[11px] uppercase tracking-widest mb-2" style={{ color: colors.goldDark }}>
             Étape 1 sur 2
           </p>
@@ -350,6 +513,8 @@ export default function DashboardExtrait() {
             </>
           )}
         </div>
+      )}
+      </>
       )}
     </DashboardShell>
   );
