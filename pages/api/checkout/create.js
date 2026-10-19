@@ -3,6 +3,7 @@ import { prisma } from "../../../lib/db";
 import { stripe } from "../../../lib/stripe";
 import { initChariowCheckout } from "../../../lib/chariow";
 import { isValidEmail } from "../../../lib/validate";
+import { splitPhone } from "../../../lib/countryCodes";
 import { checkRateLimit, getClientIp } from "../../../lib/rateLimit";
 import { isHoneypotTriggered, verifyTurnstile } from "../../../lib/antibot";
 
@@ -106,21 +107,43 @@ export default async function handler(req, res) {
   }
 
   // --- Zone Afrique francophone : Chariow ---
-  if (!salesPage.chariowProductId) {
-    return res.status(400).json({
-      error: "Produit Chariow non configuré pour ce livre. Renseigne-le manuellement dans le dashboard Chariow si le provisioning automatique a échoué.",
+  if (!salesPage.chariowProductId || !process.env.CHARIOW_API_KEY) {
+    await prisma.purchase.update({ where: { id: purchase.id }, data: { status: "failed" } });
+    return res.status(503).json({
+      error: "Le paiement en ligne de ce livre sera disponible très bientôt. Merci de revenir un peu plus tard.",
     });
   }
 
-  const result = await initChariowCheckout({
-    productId: salesPage.chariowProductId,
-    email: buyerEmail,
-    firstName: buyerName.split(" ")[0] || buyerName,
-    lastName: buyerName.split(" ").slice(1).join(" ") || buyerName,
-    phoneNumber: buyerWhatsapp,
-    redirectUrl: `${process.env.APP_URL}/p/${slug}/merci?purchase=${purchase.id}`,
-    metadata: { purchaseId: purchase.id },
-  });
+  const phone = splitPhone(buyerWhatsapp);
+  let result;
+  try {
+    result = await initChariowCheckout({
+      productId: salesPage.chariowProductId,
+      email: buyerEmail,
+      firstName: buyerName.split(" ")[0] || buyerName,
+      lastName: buyerName.split(" ").slice(1).join(" ") || buyerName.split(" ")[0],
+      phoneNumber: phone.number,
+      phoneCountryIso: phone.iso,
+      redirectUrl: `${process.env.APP_URL}/p/${slug}/merci?purchase=${purchase.id}`,
+      metadata: { purchaseId: purchase.id },
+      shipping: {
+        address: shippingAddress,
+        city: shippingCity,
+        zip: shippingPostalCode,
+        country: shippingCountry,
+      },
+    });
+  } catch (err) {
+    await prisma.purchase.update({ where: { id: purchase.id }, data: { status: "failed" } });
+    console.error("Checkout Chariow impossible :", err.message);
+    return res.status(502).json({ error: "Le paiement n'a pas pu démarrer. Réessayez dans un instant." });
+  }
+
+  // On relie l'achat à la vente Chariow : c'est cet identifiant que le Pulse
+  // renverra quand le paiement sera confirmé.
+  if (result.purchase?.id) {
+    await prisma.purchase.update({ where: { id: purchase.id }, data: { providerRef: result.purchase.id } });
+  }
 
   if (result.step === "completed") {
     await prisma.purchase.update({ where: { id: purchase.id }, data: { status: "paid" } });

@@ -1,7 +1,6 @@
 import { requireAuth } from "../../../lib/auth";
 import { prisma } from "../../../lib/db";
 import { generateSalesPageCopy } from "../../../lib/ai";
-import { createChariowProduct } from "../../../lib/chariow";
 
 function slugify(title) {
   return title
@@ -36,29 +35,9 @@ export default requireAuth(async function handler(req, res) {
       create: { bookId: book.id, slug, priceCents, currency, ...copy },
     });
 
-    // Zone Afrique : provisionne un produit Chariow pour ce livre s'il n'en a
-    // pas deja un, afin que le checkout (POST /api/checkout/create) puisse
-    // s'en servir. Best-effort - voir l'avertissement dans lib/chariow.js.
-    if (book.author.region === "AFRIQUE" && !salesPage.chariowProductId) {
-      try {
-        const product = await createChariowProduct({
-          name: book.title,
-          description: copy.solution?.slice(0, 300) || book.title,
-          priceValue: Math.round(priceCents / 100),
-          currency,
-        });
-        salesPage = await prisma.salesPage.update({
-          where: { id: salesPage.id },
-          data: { chariowProductId: product.id },
-        });
-      } catch (err) {
-        // On ne fait pas echouer la generation de la page pour autant : la
-        // page de vente reste utilisable, mais le checkout renverra une
-        // erreur explicite tant que chariowProductId n'est pas configure
-        // (manuellement si besoin, voir README).
-        console.error("Provisionnement produit Chariow echoue :", err.message);
-      }
-    }
+    // Zone Afrique : le produit Chariow de ce livre est créé à la main dans
+    // le tableau de bord Chariow, puis relié depuis l'espace Administration
+    // > Livres (l'API publique de Chariow ne permet pas de créer des produits).
 
     return res.status(201).json(salesPage);
   } catch (error) {

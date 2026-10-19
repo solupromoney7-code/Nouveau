@@ -5,6 +5,7 @@ import DashboardShell from "../../components/DashboardShell";
 import { colors, ErrorBanner, Spinner } from "../../components/ui";
 import { useAuthGuard } from "../../lib/useAuthGuard";
 import { api } from "../../lib/apiClient";
+import { COUNTRY_CODES } from "../../lib/countryCodes";
 
 const FEATURES = ["Pages de vente illimitées", "20 contenus réseaux / mois", "Essai gratuit 30 jours"];
 
@@ -71,6 +72,8 @@ export default function DashboardAbonnement() {
   const { author, setAuthor, loading: authLoading } = useAuthGuard();
 
   const [subscribing, setSubscribing] = useState(false);
+  const [phoneCode, setPhoneCode] = useState("+229");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -87,7 +90,12 @@ export default function DashboardAbonnement() {
     setError("");
     setSubscribing(true);
     try {
-      const data = await api("/api/subscriptions/checkout", { method: "POST" });
+      if (!author?.lifetimeAccess && phoneNumber.replace(/\D/g, "").length < 6) {
+        setError("Indiquez votre numéro de téléphone pour continuer.");
+        setSubscribing(false);
+        return;
+      }
+      const data = await api("/api/subscriptions/checkout", { method: "POST", body: { phone: `${phoneCode}${phoneNumber}` } });
       if (data.status === "already_active") {
         const refreshed = await api("/api/authors/me");
         setAuthor(refreshed);
@@ -156,6 +164,34 @@ export default function DashboardAbonnement() {
               </div>
 
               <ErrorBanner message={error} />
+
+              {!active && (
+                <div className="mt-3">
+                  <p className="font-mono text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.textPaperDim }}>
+                    Votre numéro de téléphone (requis pour le paiement)
+                  </p>
+                  <div className="flex gap-2 max-w-sm">
+                    <select
+                      value={phoneCode}
+                      onChange={(e) => setPhoneCode(e.target.value)}
+                      className="rounded-lg px-2 py-2.5 font-body text-sm"
+                      style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
+                    >
+                      {COUNTRY_CODES.map((c) => (
+                        <option key={c.iso} value={c.code}>{c.code}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="Numéro"
+                      className="rounded-lg px-3 py-2.5 font-body text-sm w-full min-w-0"
+                      style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
+                    />
+                  </div>
+                </div>
+              )}
 
               <button
                 onClick={handleSubscribe}

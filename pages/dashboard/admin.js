@@ -177,6 +177,34 @@ function Overview({ data }) {
   );
 }
 
+// ---------- Livres & produits Chariow ----------
+
+function ProductLinkCell({ row, onSave }) {
+  const [value, setValue] = useState(row.chariowProductId);
+  const [saving, setSaving] = useState(false);
+  const dirty = value.trim() !== row.chariowProductId;
+  if (row.region === "EUROPE") return <span style={{ color: colors.textPaperDim }}>Stripe (automatique)</span>;
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="prd_..."
+        className="rounded-lg px-2 py-1.5 font-mono text-[12px] w-40 outline-none"
+        style={{ backgroundColor: colors.paperDim, color: colors.textPaper }}
+      />
+      <button
+        disabled={!dirty || saving}
+        onClick={async () => { setSaving(true); await onSave(row, value.trim()); setSaving(false); }}
+        className="font-body text-xs px-3 py-1.5 rounded-lg"
+        style={{ backgroundColor: colors.gold, color: colors.ink, opacity: dirty ? 1 : 0.35 }}
+      >
+        {saving ? "…" : "Enregistrer"}
+      </button>
+    </div>
+  );
+}
+
 // ---------- Page ----------
 
 const TABS = [
@@ -185,6 +213,7 @@ const TABS = [
   { id: "buyers", label: "Acheteurs" },
   { id: "extract", label: "Contacts d’extrait" },
   { id: "payouts", label: "Reversements" },
+  { id: "books", label: "Livres & Chariow" },
 ];
 
 export default function DashboardAdmin() {
@@ -195,7 +224,7 @@ export default function DashboardAdmin() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState("");
 
-  const endpoints = { overview: "/api/admin/overview", authors: "/api/admin/authors", buyers: "/api/admin/buyers", extract: "/api/admin/extract-contacts", payouts: "/api/admin/payouts" };
+  const endpoints = { overview: "/api/admin/overview", authors: "/api/admin/authors", buyers: "/api/admin/buyers", extract: "/api/admin/extract-contacts", payouts: "/api/admin/payouts", books: "/api/admin/books" };
 
   async function load(which) {
     setLoadingTab(true);
@@ -311,6 +340,31 @@ export default function DashboardAdmin() {
     { label: "Traité le", key: "processedAt", render: (r) => fmtDate(r.processedAt), csv: (r) => fmtDate(r.processedAt) },
   ];
 
+  async function saveProductLink(row, value) {
+    setError("");
+    try {
+      await api(`/api/admin/sales-pages/${row.id}`, { method: "PATCH", body: { chariowProductId: value } });
+      await load("books");
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  const colsBooks = [
+    { label: "Livre", key: "bookTitle" },
+    { label: "Auteur", key: "authorName" },
+    { label: "Zone", key: "region", render: (r) => (r.region === "EUROPE" ? "Europe" : "Afrique"), csv: (r) => r.region },
+    { label: "Prix à créer dans Chariow", key: "priceCents", render: (r) => fmtMoney(r.priceCents, r.currency), csv: (r) => fmtMoney(r.priceCents, r.currency) },
+    { label: "Publiée", key: "published", render: (r) => (r.published ? "Oui" : "Non"), csv: (r) => (r.published ? "Oui" : "Non") },
+    {
+      label: "État", key: "chariowProductId",
+      render: (r) => r.region === "EUROPE" ? "—" : r.chariowProductId
+        ? <Badge bg="rgba(79,122,92,0.18)" fg="#2F5A3D">Relié</Badge>
+        : <Badge bg="rgba(201,162,39,0.28)" fg="#7A5E0B">À relier</Badge>,
+      csv: (r) => (r.chariowProductId ? "Relié" : "À relier"),
+    },
+  ];
+
   const current = data[tab];
 
   return (
@@ -380,6 +434,16 @@ export default function DashboardAdmin() {
             <DataTable title="Acheteurs" rows={current} columns={colsBuyers} searchKeys={["buyerName", "buyerEmail", "bookTitle", "authorName"]} csvName="acheteurs-plume.csv" empty="Aucun acheteur pour l’instant." />
           ) : tab === "extract" ? (
             <DataTable title="Contacts d’extrait" rows={current} columns={colsExtract} searchKeys={["firstName", "lastName", "email", "bookTitle", "authorName"]} csvName="contacts-extraits-plume.csv" empty="Aucun contact d’extrait pour l’instant." />
+          ) : tab === "books" ? (
+            <DataTable
+              title="Livres & produits Chariow"
+              rows={current}
+              columns={colsBooks}
+              searchKeys={["bookTitle", "authorName", "chariowProductId"]}
+              csvName="livres-plume.csv"
+              empty="Aucune page de vente pour l’instant."
+              extra={(r) => <ProductLinkCell key={r.id + r.chariowProductId} row={r} onSave={saveProductLink} />}
+            />
           ) : (
             <DataTable title="Reversements" rows={current} columns={colsPayouts} searchKeys={["authorName", "authorEmail"]} csvName="reversements-plume.csv" empty="Aucune demande de reversement." />
           )}

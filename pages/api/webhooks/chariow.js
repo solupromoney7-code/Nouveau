@@ -1,63 +1,118 @@
+import crypto from "crypto";
 import { prisma } from "../../../lib/db";
-import { verifyChariowSale } from "../../../lib/chariow";
+import { getChariowSale } from "../../../lib/chariow";
 import { sendPurchaseConfirmationEmail } from "../../../lib/email";
 
-// Pulse Chariow. "sale.completed" est confirmé par la documentation
-// publique. Les noms exacts des événements liés à l'abonnement
-// (échec de paiement, annulation) ne sont PAS confirmés — vérifie-les dans
-// Réglages > Pulses de ton dashboard Chariow et ajuste les comparaisons
-// event === "..." ci-dessous si besoin.
+// Pulse Chariow (webhook). Configuration côté Chariow :
+//   Automatisations > Pulses > Créer un pulse
+//   URL   : https://VOTRE-SITE/api/webhooks/chariow
+//   Événements : "Vente réussie" (successful.sale) et "Vente échouée" (failed.sale)
+// Puis copier le "Signing secret" (whsec_...) du pulse dans la variable
+// d'environnement CHARIOW_WEBHOOK_SECRET.
 //
-// SÉCURITÉ : Chariow ne documente pas de signature HMAC vérifiable pour le
-// moment (contrairement à Stripe). En attendant de la confirmer avec leur
-// support, on protège cette route par un secret partagé dans l'URL — configure
-// dans Chariow l'URL exacte :
-//   https://ton-domaine.vercel.app/api/webhooks/chariow?secret=TA_VALEUR
-// (la même valeur que CHARIOW_WEBHOOK_SECRET). Sans ce secret, la requête
-// est rejetée avant même d'être lue — même le cas "sale.completed", pourtant
-// déjà re-vérifié auprès de Chariow, gagne cette couche supplémentaire.
+// Sécurité : chaque requête est signée (en-tête x-chariow-signature =
+// "sha256=" + HMAC-SHA256 du corps brut avec le secret du pulse). On vérifie
+// cette signature sur le corps BRUT avant de lire quoi que ce soit.
+export const config = { api: { bodyParser: false } };
+
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+function signatureIsValid(rawBody, header, secret) {
+  if (!header || !secret) return false;
+  const expected = "sha256=" + crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(header));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function formatAmount(cents, currency) {
+  const amount = (cents || 0) / 100;
+  return currency === "EUR" ? `${amount.toFixed(2)} €` : `${Math.round(amount).toLocaleString("fr-FR")} FCFA`;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  if (!process.env.CHARIOW_WEBHOOK_SECRET || req.query.secret !== process.env.CHARIOW_WEBHOOK_SECRET) {
-    return res.status(401).json({ error: "Non autorisé" });
+  const secret = process.env.CHARIOW_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error("CHARIOW_WEBHOOK_SECRET manquant — Pulse Chariow rejeté.");
+    return res.status(500).json({ error: "Webhook non configuré" });
   }
 
-  const { event, data } = req.body || {};
-  if (!event || !data) return res.status(400).json({ error: "Payload invalide" });
+  const raw = await readRawBody(req);
+  if (!signatureIsValid(raw, req.headers["x-chariow-signature"], secret)) {
+    return res.status(401).json({ error: "Signature invalide" });
+  }
 
-  const customerEmail = data.customer?.email;
-  const productSlug = data.product?.slug;
-  const authorId = data.metadata?.authorId;
-  const kind = data.metadata?.kind;
+  let payload;
+  try {
+    payload = JSON.parse(raw.toString("utf8"));
+  } catch {
+    return res.status(400).json({ error: "Payload invalide" });
+  }
 
-  if (event === "sale.completed") {
-    // Reconfirmation serveur-à-serveur avant de faire confiance à la
-    // notification — même principe que pour CinetPay/Stripe.
-    const confirmed =
-      customerEmail && productSlug ? await verifyChariowSale({ productSlug, customerEmail }) : null;
+  const event = payload.event || req.headers["x-pulse-event"];
+  const sale = payload.sale || {};
+  const productId = payload.product?.id;
+  const customerEmail = (payload.customer?.email || "").toLowerCase();
 
-    if (!confirmed) {
-      return res.status(200).json({ received: true, ignored: "not_confirmed" });
-    }
+  try {
+    if (event === "successful.sale") {
+      // Reconfirmation auprès de Chariow (défense en profondeur). Si la
+      // lecture échoue pour une raison technique, la signature valide suffit.
+      try {
+        const confirmed = sale.id ? await getChariowSale(sale.id) : null;
+        if (confirmed && !["completed", "settled"].includes(confirmed.status)) {
+          return res.status(200).json({ received: true, ignored: "not_completed" });
+        }
+      } catch (err) {
+        console.error("Reconfirmation Chariow impossible :", err.message);
+      }
 
-    if (kind === "subscription" && authorId) {
-      // Paiement de l'abonnement à la plateforme.
-      await prisma.author.update({
-        where: { id: authorId },
-        data: {
-          subscriptionStatus: "ACTIVE",
-          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        },
-      });
-    } else if (customerEmail) {
-      // Achat d'un livre (zone Afrique).
-      const purchase = await prisma.purchase.findFirst({
-        where: { provider: "chariow", buyerEmail: customerEmail, status: "pending" },
-        orderBy: { createdAt: "desc" },
-        include: { book: true },
-      });
-      if (purchase) {
+      // --- Abonnement Plume ---
+      if (productId && productId === process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID) {
+        const authorId = sale.custom_metadata?.authorId;
+        const author = authorId
+          ? await prisma.author.findUnique({ where: { id: authorId } })
+          : customerEmail
+          ? await prisma.author.findFirst({ where: { email: { equals: customerEmail, mode: "insensitive" } } })
+          : null;
+        if (author) {
+          // Date de fin calculée à partir du paiement : rejouer le même Pulse
+          // ne prolonge donc jamais l'abonnement une deuxième fois.
+          const paidAt = sale.completed_at ? new Date(sale.completed_at) : new Date();
+          const end = new Date(paidAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+          await prisma.author.update({
+            where: { id: author.id },
+            data: {
+              subscriptionStatus: "ACTIVE",
+              currentPeriodEnd: author.currentPeriodEnd && author.currentPeriodEnd > end ? author.currentPeriodEnd : end,
+            },
+          });
+        }
+        return res.status(200).json({ received: true });
+      }
+
+      // --- Achat d'un livre ---
+      let purchase = sale.id
+        ? await prisma.purchase.findFirst({ where: { provider: "chariow", providerRef: sale.id }, include: { book: true } })
+        : null;
+      if (!purchase && customerEmail) {
+        purchase = await prisma.purchase.findFirst({
+          where: { provider: "chariow", buyerEmail: { equals: customerEmail, mode: "insensitive" }, status: "pending" },
+          orderBy: { createdAt: "desc" },
+          include: { book: true },
+        });
+      }
+
+      if (purchase && purchase.status !== "paid") {
         await prisma.purchase.update({ where: { id: purchase.id }, data: { status: "paid" } });
         await prisma.lead.create({
           data: {
@@ -74,20 +129,20 @@ export default async function handler(req, res) {
           to: purchase.buyerEmail,
           buyerName: purchase.buyerName,
           bookTitle: purchase.book.title,
-          amountFormatted: `${purchase.amountCents} ${purchase.currency}`,
+          amountFormatted: formatAmount(purchase.amountCents, purchase.currency),
         });
       }
     }
-  }
 
-  // À CONFIRMER dans le dashboard Chariow (Réglages > Pulses).
-  if (event === "subscription.payment_failed" && authorId) {
-    await prisma.author.update({ where: { id: authorId }, data: { subscriptionStatus: "PAST_DUE" } });
-  }
-
-  // À CONFIRMER dans le dashboard Chariow (Réglages > Pulses).
-  if (event === "subscription.cancelled" && authorId) {
-    await prisma.author.update({ where: { id: authorId }, data: { subscriptionStatus: "CANCELED" } });
+    if (event === "failed.sale" && sale.id) {
+      await prisma.purchase.updateMany({
+        where: { provider: "chariow", providerRef: sale.id, status: "pending" },
+        data: { status: "failed" },
+      });
+    }
+  } catch (error) {
+    console.error("Erreur Pulse Chariow :", error);
+    return res.status(500).json({ error: "Erreur de traitement" });
   }
 
   return res.status(200).json({ received: true });
