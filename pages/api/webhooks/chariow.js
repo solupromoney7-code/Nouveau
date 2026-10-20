@@ -58,7 +58,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Payload invalide" });
   }
 
-  const event = payload.event || req.headers["x-pulse-event"];
+  // Chariow écrit les événements "successful.sale" (documentation) ou
+  // "successful_sale" (tableau de bord) : on accepte les deux.
+  const event = String(payload.event || req.headers["x-pulse-event"] || "").replace(/_/g, ".");
   const sale = payload.sale || {};
   const productId = payload.product?.id;
   const customerEmail = (payload.customer?.email || "").toLowerCase();
