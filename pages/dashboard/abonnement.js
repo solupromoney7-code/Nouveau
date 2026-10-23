@@ -7,7 +7,7 @@ import { useAuthGuard } from "../../lib/useAuthGuard";
 import { api } from "../../lib/apiClient";
 import { COUNTRY_CODES } from "../../lib/countryCodes";
 
-const FEATURES = ["Pages de vente illimitées", "20 contenus réseaux / mois", "Essai gratuit 30 jours"];
+const FEATURES = ["Pages de vente illimitées", "Pages d’extrait avec capture de contacts", "5 hooks et 5 scripts vidéo par chapitre", "20 contenus réseaux / mois", "Tunnels de vente par email", "Essai gratuit 30 jours"];
 
 function daysLeft(date) {
   if (!date) return 0;
