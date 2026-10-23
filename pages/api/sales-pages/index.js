@@ -1,6 +1,7 @@
 import { requireAuth } from "../../../lib/auth";
 import { prisma } from "../../../lib/db";
 import { generateSalesPageCopy } from "../../../lib/ai";
+import { BOOK_PRICE_TIERS } from "../../../lib/chariowTiers";
 
 function slugify(title) {
   return title
@@ -17,6 +18,10 @@ export default requireAuth(async function handler(req, res) {
   const { bookId, priceCents, currency } = req.body;
   if (!bookId || !priceCents || !currency) {
     return res.status(400).json({ error: "bookId, priceCents et currency sont requis" });
+  }
+
+  if (currency === "XOF" && !BOOK_PRICE_TIERS.includes(Math.round(Number(priceCents) / 100))) {
+    return res.status(400).json({ error: "Ce prix n'est pas proposé. Choisissez l'un des prix de la liste." });
   }
 
   try {

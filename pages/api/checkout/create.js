@@ -3,6 +3,7 @@ import { prisma } from "../../../lib/db";
 import { stripe } from "../../../lib/stripe";
 import { initChariowCheckout } from "../../../lib/chariow";
 import { isValidEmail } from "../../../lib/validate";
+import { variantForPriceCents } from "../../../lib/chariowTiers";
 import { splitPhone } from "../../../lib/countryCodes";
 import { checkRateLimit, getClientIp } from "../../../lib/rateLimit";
 import { isHoneypotTriggered, verifyTurnstile } from "../../../lib/antibot";
@@ -107,7 +108,12 @@ export default async function handler(req, res) {
   }
 
   // --- Zone Afrique francophone : Chariow ---
-  if (!salesPage.chariowProductId || !process.env.CHARIOW_API_KEY) {
+  // Un seul produit Chariow pour tous les livres ; le prix choisi par l'auteur
+  // correspond à une variante de prix. Sans variante connue on refuse plutôt
+  // que de facturer un montant erroné.
+  const productId = salesPage.chariowProductId || process.env.CHARIOW_BOOK_PRODUCT_ID;
+  const priceVariantId = salesPage.chariowProductId ? null : variantForPriceCents(salesPage.priceCents);
+  if (!productId || !process.env.CHARIOW_API_KEY || (!salesPage.chariowProductId && !priceVariantId)) {
     await prisma.purchase.update({ where: { id: purchase.id }, data: { status: "failed" } });
     return res.status(503).json({
       error: "Le paiement en ligne de ce livre sera disponible très bientôt. Merci de revenir un peu plus tard.",
@@ -118,7 +124,8 @@ export default async function handler(req, res) {
   let result;
   try {
     result = await initChariowCheckout({
-      productId: salesPage.chariowProductId,
+      productId,
+      priceVariantId,
       email: buyerEmail,
       firstName: buyerName.split(" ")[0] || buyerName,
       lastName: buyerName.split(" ").slice(1).join(" ") || buyerName.split(" ")[0],

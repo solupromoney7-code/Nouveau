@@ -5,6 +5,7 @@ import DashboardShell from "../../components/DashboardShell";
 import { colors, BookCover, EditableTitle, ErrorBanner, Spinner } from "../../components/ui";
 import { useAuthGuard } from "../../lib/useAuthGuard";
 import { api, getToken } from "../../lib/apiClient";
+import { BOOK_PRICE_TIERS } from "../../lib/chariowTiers";
 
 // Bouton discret posé sur la couverture pour en changer l'image — réutilisé
 // sur la page de vente et la page d'extrait.
@@ -62,7 +63,7 @@ export default function DashboardVente() {
   const [error, setError] = useState("");
   const [book, setBook] = useState(null);
   const [salesPage, setSalesPage] = useState(null);
-  const [priceInput, setPriceInput] = useState("12");
+  const [priceInput, setPriceInput] = useState(String(BOOK_PRICE_TIERS[0]));
   const [copied, setCopied] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
@@ -252,13 +253,26 @@ export default function DashboardVente() {
                   <p className="font-mono text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.textPaperDim }}>
                     Prix de vente ({currencyLabel})
                   </p>
-                  <input
-                    type="number"
-                    value={priceInput}
-                    onChange={(e) => setPriceInput(e.target.value)}
-                    className="w-32 rounded-lg px-3 py-2 font-body text-sm"
-                    style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
-                  />
+                  {currency === "XOF" ? (
+                    <select
+                      value={priceInput}
+                      onChange={(e) => setPriceInput(e.target.value)}
+                      className="w-40 rounded-lg px-3 py-2 font-body text-sm"
+                      style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
+                    >
+                      {BOOK_PRICE_TIERS.map((p) => (
+                        <option key={p} value={p}>{p.toLocaleString("fr-FR")} FCFA</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="number"
+                      value={priceInput}
+                      onChange={(e) => setPriceInput(e.target.value)}
+                      className="w-32 rounded-lg px-3 py-2 font-body text-sm"
+                      style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
+                    />
+                  )}
                 </div>
               )}
 
