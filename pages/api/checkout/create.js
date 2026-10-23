@@ -3,6 +3,7 @@ import { prisma } from "../../../lib/db";
 import { stripe } from "../../../lib/stripe";
 import { initChariowCheckout } from "../../../lib/chariow";
 import { isValidEmail } from "../../../lib/validate";
+import { buildPaymentLinkUrl } from "../../../lib/paymentLink";
 import { variantForPriceCents } from "../../../lib/chariowTiers";
 import { splitPhone } from "../../../lib/countryCodes";
 import { checkRateLimit, getClientIp } from "../../../lib/rateLimit";
@@ -74,8 +75,20 @@ export default async function handler(req, res) {
 
   // --- Zone Europe : Stripe Checkout + Connect ---
   if (author.region === "EUROPE") {
+    // Cas principal : l'auteur a collé son propre lien de paiement. L'argent
+    // arrive directement chez lui ; la vente reste "en attente" côté Plume
+    // (pas de confirmation automatique).
+    if (author.paymentLink) {
+      await prisma.purchase.update({ where: { id: purchase.id }, data: { provider: "lien_auteur" } });
+      return res.status(200).json({
+        url: buildPaymentLinkUrl(author.paymentLink, { email: buyerEmail, purchaseId: purchase.id }),
+        purchaseId: purchase.id,
+      });
+    }
+
     if (!author.stripeAccountId || !author.stripeOnboarded) {
-      return res.status(400).json({ error: "L'auteur n'a pas encore connecté son compte Stripe" });
+      await prisma.purchase.update({ where: { id: purchase.id }, data: { status: "failed" } });
+      return res.status(400).json({ error: "Le paiement en ligne de ce livre n'est pas encore disponible." });
     }
 
     const session = await stripe.checkout.sessions.create({

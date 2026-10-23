@@ -111,7 +111,7 @@ export default function DashboardAbonnement() {
   }
 
   const isAfrique = author?.region === "AFRIQUE";
-  const price = isAfrique ? "3 900 FCFA" : "5,99 €";
+  const price = isAfrique ? "3 900 FCFA" : "9 €";
   const payMethod = isAfrique ? "Mobile Money" : "Carte bancaire";
   const lifetime = Boolean(author?.lifetimeAccess);
   const active = author?.subscriptionStatus === "ACTIVE" || lifetime;

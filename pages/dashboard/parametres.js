@@ -217,6 +217,73 @@ function StripeSection({ author }) {
   );
 }
 
+function PaymentLinkSection({ author }) {
+  const [link, setLink] = useState(author?.paymentLink || "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    setSaved(false);
+    try {
+      const data = await api("/api/authors/payment-config", { method: "PUT", body: { paymentLink: link } });
+      setLink(data.paymentLink || "");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl p-6 md:p-8" style={{ backgroundColor: colors.paper }}>
+      <div className="flex items-center gap-2 mb-1">
+        <CreditCard size={16} color={colors.goldDark} />
+        <h2 className="font-display text-lg" style={{ color: colors.textPaper }}>Moyen d’encaissement</h2>
+      </div>
+      <p className="font-body text-sm mb-2" style={{ color: colors.textPaperDim }}>
+        Collez le lien de paiement de votre propre compte Stripe (ou PayPal). Vos acheteurs paient directement chez vous : l’argent arrive sur votre compte bancaire, Plume n’y touche jamais.
+      </p>
+      <p className="font-body text-xs mb-4" style={{ color: colors.textPaperDim }}>
+        Dans Stripe : Produits → Liens de paiement → Créer. Mettez le prix de votre livre, activez la collecte de l’adresse de livraison, puis copiez le lien (https://buy.stripe.com/…).
+      </p>
+
+      <form onSubmit={handleSave} className="space-y-3 max-w-lg">
+        <ErrorBanner message={error} />
+        <input
+          type="url"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="https://buy.stripe.com/..."
+          className="w-full rounded-lg px-3 py-2 font-body text-sm"
+          style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
+        />
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-body font-semibold text-sm"
+            style={{ backgroundColor: colors.gold, color: colors.ink, opacity: saving ? 0.6 : 1 }}
+          >
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </button>
+          {saved && (
+            <span className="flex items-center gap-1 font-body text-xs" style={{ color: colors.forest }}>
+              <Check size={13} /> Enregistré
+            </span>
+          )}
+        </div>
+      </form>
+    </section>
+  );
+}
+
 export default function DashboardParametres() {
   const { author, loading } = useAuthGuard();
 
@@ -232,7 +299,7 @@ export default function DashboardParametres() {
       ) : (
         <div className="max-w-2xl space-y-6">
           <EmailVerificationSection author={author} />
-          {author?.region === "EUROPE" ? <StripeSection author={author} /> : <MomoSection author={author} />}
+          {author?.region === "EUROPE" ? <PaymentLinkSection author={author} /> : <MomoSection author={author} />}
         </div>
       )}
     </DashboardShell>

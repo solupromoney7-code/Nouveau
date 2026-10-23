@@ -22,7 +22,9 @@ export default requireAuth(async function handler(req, res) {
     }
 
     const result = await initChariowCheckout({
-      productId: process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID,
+      productId: author.region === "EUROPE"
+        ? (process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID_EUROPE || process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID)
+        : process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID,
       email: author.email,
       firstName: firstName || author.name,
       lastName: rest.join(" ") || author.name,

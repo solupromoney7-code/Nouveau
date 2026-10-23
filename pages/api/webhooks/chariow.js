@@ -79,7 +79,7 @@ export default async function handler(req, res) {
       }
 
       // --- Abonnement Plume ---
-      if (productId && productId === process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID) {
+      if (productId && [process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID, process.env.CHARIOW_SUBSCRIPTION_PRODUCT_ID_EUROPE].filter(Boolean).includes(productId)) {
         const authorId = sale.custom_metadata?.authorId;
         const author = authorId
           ? await prisma.author.findUnique({ where: { id: authorId } })

@@ -37,6 +37,7 @@ model Author {
   // Stripe Connect — zone Europe
   stripeAccountId    String?
   stripeOnboarded    Boolean             @default(false)
+  paymentLink        String?             // zone Europe : lien de paiement de l'auteur (Stripe Payment Link, PayPal…)
 
   // Mobile Money — zone Afrique francophone
   momoOperator       String?

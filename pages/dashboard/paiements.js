@@ -100,11 +100,11 @@ export default function DashboardPaiements() {
                 {author?.region === "EUROPE" ? <CreditCard size={20} color={colors.goldDark} /> : <Smartphone size={20} color={colors.goldDark} />}
               </div>
               <h2 className="font-display text-lg mb-2" style={{ color: colors.textPaper }}>
-                {author?.region === "EUROPE" ? "Connectez votre compte Stripe" : "Renseignez votre numéro Mobile Money"}
+                {author?.region === "EUROPE" ? "Ajoutez votre lien de paiement" : "Renseignez votre numéro Mobile Money"}
               </h2>
               <p className="font-body text-sm mb-5" style={{ color: colors.textPaperDim }}>
                 {author?.region === "EUROPE"
-                  ? "Pour recevoir vos paiements, connectez un compte Stripe depuis Paramètres."
+                  ? "Pour recevoir vos paiements, collez votre lien de paiement Stripe depuis Paramètres."
                   : "Pour recevoir vos reversements, renseignez votre numéro Mobile Money depuis Paramètres."}
               </p>
               <Link
