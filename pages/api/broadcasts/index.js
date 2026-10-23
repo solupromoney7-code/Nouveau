@@ -33,7 +33,7 @@ export default requireAuth(async function handler(req, res) {
 
   const when = scheduledAt ? new Date(scheduledAt) : new Date();
 
-  const where = { authorId: req.authorId, ...(listSource !== "tous" && { source: listSource }) };
+  const where = { authorId: req.authorId, unsubscribed: false, ...(listSource !== "tous" && { source: listSource }) };
   const recipients = await prisma.lead.findMany({ where });
 
   const broadcast = await prisma.broadcast.create({
@@ -57,6 +57,7 @@ export default requireAuth(async function handler(req, res) {
         subject: renderTemplate(subject, { prenom: lead.firstName, auteur: author.name }),
         textBody: renderTemplate(body, { prenom: lead.firstName, auteur: author.name }),
         replyTo: author.email,
+        leadId: lead.id,
       });
       if (!result.sent) anyFailed = true;
     }

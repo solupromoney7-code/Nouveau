@@ -119,6 +119,7 @@ model Lead {
   email      String
   whatsapp   String
   source     String   // "extrait" | "acheteur"
+  unsubscribed Boolean @default(false) // désinscrit des emails
   createdAt  DateTime @default(now())
 
   emailSends    EmailSend[]

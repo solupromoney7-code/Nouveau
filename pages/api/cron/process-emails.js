@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     }
 
     const leads = await prisma.lead.findMany({
-      where: { authorId: sequence.authorId, source: sequence.listSource },
+      where: { authorId: sequence.authorId, source: sequence.listSource, unsubscribed: false },
       include: { book: { include: { salesPage: true } } },
     });
 
@@ -74,6 +74,7 @@ export default async function handler(req, res) {
         to: lead.email,
         subject: renderTemplate(nextStep.subject, vars),
         textBody: renderTemplate(nextStep.body, vars),
+        leadId: lead.id,
       });
 
       if (result.sent) {
@@ -102,7 +103,7 @@ export default async function handler(req, res) {
     }
 
     const leads = await prisma.lead.findMany({
-      where: { authorId: sequence.authorId, source: sequence.listSource },
+      where: { authorId: sequence.authorId, source: sequence.listSource, unsubscribed: false },
       include: { book: { include: { salesPage: true } } },
     });
 
@@ -155,7 +156,7 @@ export default async function handler(req, res) {
       continue;
     }
 
-    const where = { authorId: broadcast.authorId, ...(broadcast.listSource !== "tous" && { source: broadcast.listSource }) };
+    const where = { authorId: broadcast.authorId, unsubscribed: false, ...(broadcast.listSource !== "tous" && { source: broadcast.listSource }) };
     const recipients = await prisma.lead.findMany({ where });
 
     let anyFailed = false;
@@ -165,6 +166,7 @@ export default async function handler(req, res) {
         subject: renderTemplate(broadcast.subject, { prenom: lead.firstName, auteur: broadcast.author.name }),
         textBody: renderTemplate(broadcast.body, { prenom: lead.firstName, auteur: broadcast.author.name }),
         replyTo: broadcast.author.email,
+        leadId: lead.id,
       });
       if (result.sent) broadcastsSent += 1;
       else anyFailed = true;

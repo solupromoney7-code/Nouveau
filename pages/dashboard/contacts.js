@@ -32,7 +32,7 @@ export default function DashboardContacts() {
       setError("Renseignez l’objet et le message.");
       return;
     }
-    if (!window.confirm(`Envoyer cet email à ${rows.length} contact(s) (${TAB_LABEL[tab]}) ?`)) return;
+    if (!window.confirm(`Envoyer cet email à ${rows.filter((r) => !r.unsubscribed).length} contact(s) (${TAB_LABEL[tab]}) ?`)) return;
     setSending(true);
     try {
       const data = await api("/api/broadcasts", {
@@ -196,7 +196,9 @@ export default function DashboardContacts() {
                             </a>
                           ) : "—"}
                         </td>
-                        <td className="py-2.5 pr-4 whitespace-nowrap" style={{ color: colors.textPaperDim }}>{r.email}</td>
+                        <td className="py-2.5 pr-4 whitespace-nowrap" style={{ color: colors.textPaperDim }}>
+                          {r.email}{r.unsubscribed && <span className="ml-2 font-mono text-[10px] uppercase" style={{ color: colors.wine }}>désinscrit</span>}
+                        </td>
                         <td className="py-2.5 whitespace-nowrap" style={{ color: colors.textPaperDim }}>
                           {new Date(r.createdAt).toLocaleDateString("fr-FR")}
                         </td>
