@@ -15,6 +15,14 @@ import { isSubscriptionActive } from "../../../lib/subscription";
 //   2. Envoie les broadcasts programmés dont l'heure est passée (déjà
 //      filtrés à la création par la même règle, voir broadcasts/index.js —
 //      revérifié ici au cas où l'abonnement aurait expiré entre-temps).
+// Ajoute un lien "répondre à l'auteur" : les messages partent du numéro de
+// Plume, mais le lecteur peut ensuite écrire directement à l'auteur.
+function withReplyLink(text, authorNumber) {
+  const digits = String(authorNumber || "").replace(/\D/g, "");
+  const base = String(text || "").slice(0, 900);
+  return digits ? `${base} — Répondre à l'auteur : https://wa.me/${digits}` : base;
+}
+
 export default async function handler(req, res) {
   const auth = req.headers.authorization || "";
   if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -92,7 +100,7 @@ export default async function handler(req, res) {
     where: { active: true },
     include: {
       steps: { orderBy: { order: "asc" } },
-      author: { select: { id: true, name: true, region: true, subscriptionStatus: true, trialEndsAt: true, lifetimeAccess: true } },
+      author: { select: { id: true, name: true, region: true, subscriptionStatus: true, trialEndsAt: true, lifetimeAccess: true, whatsappNumber: true } },
     },
   });
 
@@ -133,7 +141,7 @@ export default async function handler(req, res) {
 
       const result = await sendWhatsAppMessage({
         to: lead.whatsapp,
-        bodyText: renderTemplate(nextStep.body, vars),
+        bodyText: withReplyLink(renderTemplate(nextStep.body, vars), sequence.author.whatsappNumber),
       });
 
       if (result.sent) {

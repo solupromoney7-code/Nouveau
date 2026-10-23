@@ -17,6 +17,16 @@ export default requireAuth(async function handler(req, res) {
     }
 
     if (req.method === "PUT") {
+      // Numéro WhatsApp de l'auteur
+      if (req.body && "whatsappNumber" in req.body) {
+        const digits = String(req.body.whatsappNumber || "").replace(/\D/g, "");
+        if (digits.length < 8 || digits.length > 15) {
+          return res.status(400).json({ error: "Numéro WhatsApp invalide (indiquez l'indicatif du pays, ex. +229…)." });
+        }
+        await prisma.author.update({ where: { id: req.authorId }, data: { whatsappNumber: `+${digits}` } });
+        return res.status(200).json({ ok: true, whatsappNumber: `+${digits}` });
+      }
+
       // Zone Europe : lien de paiement de l'auteur
       if (req.body && "paymentLink" in req.body) {
         const raw = String(req.body.paymentLink || "").trim();

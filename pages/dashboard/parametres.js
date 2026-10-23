@@ -284,6 +284,69 @@ function PaymentLinkSection({ author }) {
   );
 }
 
+function WhatsAppNumberSection({ author }) {
+  const [number, setNumber] = useState(author?.whatsappNumber || "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    setSaved(false);
+    try {
+      const data = await api("/api/authors/payment-config", { method: "PUT", body: { whatsappNumber: number } });
+      setNumber(data.whatsappNumber);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl p-6 md:p-8" style={{ backgroundColor: colors.paper }}>
+      <div className="flex items-center gap-2 mb-1">
+        <Smartphone size={16} color={colors.goldDark} />
+        <h2 className="font-display text-lg" style={{ color: colors.textPaper }}>Mon numéro WhatsApp</h2>
+      </div>
+      <p className="font-body text-sm mb-4" style={{ color: colors.textPaperDim }}>
+        Vos lecteurs pourront vous répondre directement sur ce numéro : un lien « Répondre à l’auteur » est ajouté à vos messages WhatsApp automatiques.
+      </p>
+      <form onSubmit={handleSave} className="space-y-3 max-w-sm">
+        <ErrorBanner message={error} />
+        <input
+          type="tel"
+          value={number}
+          onChange={(e) => setNumber(e.target.value)}
+          placeholder="+229 01 00 00 00 00"
+          className="w-full rounded-lg px-3 py-2 font-body text-sm"
+          style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
+        />
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-body font-semibold text-sm"
+            style={{ backgroundColor: colors.gold, color: colors.ink, opacity: saving ? 0.6 : 1 }}
+          >
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </button>
+          {saved && (
+            <span className="flex items-center gap-1 font-body text-xs" style={{ color: colors.forest }}>
+              <Check size={13} /> Enregistré
+            </span>
+          )}
+        </div>
+      </form>
+    </section>
+  );
+}
+
 export default function DashboardParametres() {
   const { author, loading } = useAuthGuard();
 
@@ -299,6 +362,7 @@ export default function DashboardParametres() {
       ) : (
         <div className="max-w-2xl space-y-6">
           <EmailVerificationSection author={author} />
+          <WhatsAppNumberSection author={author} />
           {author?.region === "EUROPE" ? <PaymentLinkSection author={author} /> : <MomoSection author={author} />}
         </div>
       )}

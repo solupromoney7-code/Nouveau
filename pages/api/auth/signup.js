@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Vérification anti-bot échouée." });
   }
 
-  const { email, password, name, region } = req.body;
+  const { email, password, name, region, whatsapp } = req.body;
   if (!email || !password || !name) {
     return res.status(400).json({ error: "Email, mot de passe et nom sont requis" });
   }
@@ -31,6 +31,11 @@ export default async function handler(req, res) {
   }
   if (password.length < 8) {
     return res.status(400).json({ error: "Le mot de passe doit contenir au moins 8 caractères" });
+  }
+
+  const whatsappDigits = String(whatsapp || "").replace(/\D/g, "");
+  if (whatsappDigits.length < 8 || whatsappDigits.length > 15) {
+    return res.status(400).json({ error: "Indiquez un numéro WhatsApp valide (avec l'indicatif du pays)." });
   }
 
   const existing = await prisma.author.findUnique({ where: { email } });
@@ -45,6 +50,7 @@ export default async function handler(req, res) {
       passwordHash,
       name: clampText(name, 120),
       region: region === "EUROPE" ? "EUROPE" : "AFRIQUE",
+      whatsappNumber: `+${whatsappDigits}`,
       trialEndsAt,
     },
   });

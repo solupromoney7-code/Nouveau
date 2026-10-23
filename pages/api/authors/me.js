@@ -10,7 +10,7 @@ export default requireAuth(async function handler(req, res) {
     select: {
       id: true, name: true, email: true, region: true, emailVerified: true,
       subscriptionStatus: true, lifetimeAccess: true, trialEndsAt: true, currentPeriodEnd: true,
-      stripeAccountId: true, stripeOnboarded: true, paymentLink: true,
+      stripeAccountId: true, stripeOnboarded: true, paymentLink: true, whatsappNumber: true,
       momoOperator: true, momoNumber: true,
     },
   });

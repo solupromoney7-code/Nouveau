@@ -4,10 +4,11 @@ import Link from "next/link";
 import { colors, inputStyle, ErrorBanner, Spinner } from "../components/ui";
 import AuthShell from "../components/AuthShell";
 import { api, saveToken } from "../lib/apiClient";
+import { COUNTRY_CODES, DEFAULT_COUNTRY_CODE } from "../lib/countryCodes";
 
 export default function Inscription() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "", region: "AFRIQUE", website: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", region: "AFRIQUE", website: "", phoneCode: DEFAULT_COUNTRY_CODE, phone: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -21,6 +22,11 @@ export default function Inscription() {
       setError("Le mot de passe doit contenir au moins 8 caractères.");
       return;
     }
+    const phoneDigits = form.phone.replace(/\D/g, "").replace(/^0+/, "");
+    if (phoneDigits.length < 6) {
+      setError("Indiquez votre numéro WhatsApp.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -32,6 +38,7 @@ export default function Inscription() {
           email: form.email,
           password: form.password,
           region: form.region,
+          whatsapp: `${form.phoneCode}${phoneDigits}`,
           hpField: form.website, // honeypot — doit rester vide
         },
       });
@@ -105,6 +112,26 @@ export default function Inscription() {
         className="rounded-lg px-3 py-2.5 font-body text-sm"
         style={inputStyle}
       />
+
+      <div className="flex gap-2">
+        <select
+          value={form.phoneCode}
+          onChange={(e) => setForm({ ...form, phoneCode: e.target.value })}
+          className="rounded-lg px-2 py-2.5 font-body text-sm"
+          style={{ ...inputStyle, width: 110 }}
+          aria-label="Indicatif du pays"
+        >
+          {COUNTRY_CODES.map((c) => <option key={c.iso} value={c.code}>{c.iso} {c.code}</option>)}
+        </select>
+        <input
+          type="tel"
+          placeholder="Votre numéro WhatsApp"
+          value={form.phone}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          className="rounded-lg px-3 py-2.5 font-body text-sm flex-1 min-w-0"
+          style={inputStyle}
+        />
+      </div>
 
       <div className="flex rounded-full p-1 mt-1" style={{ backgroundColor: colors.paperDim }}>
         {["AFRIQUE", "EUROPE"].map((r) => (
