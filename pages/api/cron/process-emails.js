@@ -20,7 +20,7 @@ import { isSubscriptionActive } from "../../../lib/subscription";
 function withReplyLink(text, authorNumber) {
   const digits = String(authorNumber || "").replace(/\D/g, "");
   const base = String(text || "").slice(0, 900);
-  return digits ? `${base} — Répondre à l'auteur : https://wa.me/${digits}` : base;
+  return digits ? `${base} 👉 Répondez-moi ici : https://wa.me/${digits}` : base;
 }
 
 export default async function handler(req, res) {

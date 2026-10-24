@@ -99,12 +99,17 @@ function SequenceStep({ step, channel, onSave }) {
               onChange={(e) => setBody(e.target.value)}
               onBlur={() => persist({ body })}
               rows={channel === "email" ? 7 : 5}
-              maxLength={channel === "whatsapp" ? 1024 : undefined}
+              maxLength={channel === "whatsapp" ? 900 : undefined}
               className="w-full rounded-lg px-3 py-2 font-body text-sm resize-y"
               style={{ backgroundColor: colors.paperDim, color: colors.textPaper, border: "none" }}
             />
             {channel === "whatsapp" && (
-              <p className="font-mono text-[10px] mt-1" style={{ color: colors.mist }}>{body.length} / 1024 caractères</p>
+              <p className="font-mono text-[10px] mt-1" style={{ color: colors.mist }}>{body.length} / 900 caractères</p>
+            )}
+            {channel === "whatsapp" && (
+              <p className="font-body text-xs mt-1.5" style={{ color: colors.forest }}>
+                Ajouté automatiquement à la fin de chaque message : « Répondez-moi ici » + un lien vers votre WhatsApp (celui de Paramètres).
+              </p>
             )}
             <p className="font-mono text-[10px] mt-1.5" style={{ color: colors.mist }}>
               Variables disponibles : {"{{prenom}}"}, {"{{titre}}"}, {"{{auteur}}"}, {"{{lien_achat}}"}, {"{{lien_boutique}}"}
