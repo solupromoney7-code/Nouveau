@@ -23,6 +23,22 @@ function withReplyLink(text, authorNumber) {
   return digits ? `${base} 👉 Répondez-moi ici : https://wa.me/${digits}` : base;
 }
 
+// Premier message d'une séquence WhatsApp : le lecteur doit savoir tout de
+// suite QUI écrit. Si le texte ne mentionne pas déjà le nom de l'auteur, on
+// ajoute en tête « Bonjour <prénom>, c'est <auteur>, l'auteur de « <titre> ». ».
+function withAuthorIntro(text, { prenom, auteur, titre }) {
+  const body = String(text || "");
+  if (!auteur || body.toLowerCase().includes(String(auteur).toLowerCase())) return body;
+  const who = titre ? `c’est ${auteur}, l’auteur de « ${titre} ».` : `c’est ${auteur}.`;
+  const greeting = prenom ? `Bonjour ${prenom}, ${who}` : `Bonjour, ${who}`;
+  // Évite le double « Bonjour Franck, … » si le texte commence déjà ainsi.
+  const stripped = prenom
+    ? body.replace(new RegExp(`^\\s*Bonjour\\s+${prenom.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[,!.]?\\s*`, "i"), "")
+    : body.replace(/^\s*Bonjour\s*[,!.]?\s*/i, "");
+  const rest = stripped.charAt(0).toUpperCase() + stripped.slice(1);
+  return `${greeting} ${rest}`.trim();
+}
+
 export default async function handler(req, res) {
   const auth = req.headers.authorization || "";
   if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -139,9 +155,15 @@ export default async function handler(req, res) {
         lien_boutique: `${appUrl}/boutique/${sequence.authorId}`,
       };
 
+      let text = renderTemplate(nextStep.body, vars);
+      // Premier message de la séquence : se présenter (voir withAuthorIntro).
+      if (nextStep.id === sequence.steps[0]?.id) {
+        text = withAuthorIntro(text, { prenom: vars.prenom, auteur: vars.auteur, titre: vars.titre });
+      }
+
       const result = await sendWhatsAppMessage({
         to: lead.whatsapp,
-        bodyText: withReplyLink(renderTemplate(nextStep.body, vars), sequence.author.whatsappNumber),
+        bodyText: withReplyLink(text, sequence.author.whatsappNumber),
       });
 
       if (result.sent) {

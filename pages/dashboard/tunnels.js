@@ -108,7 +108,7 @@ function SequenceStep({ step, channel, onSave }) {
             )}
             {channel === "whatsapp" && (
               <p className="font-body text-xs mt-1.5" style={{ color: colors.forest }}>
-                Ajouté automatiquement à la fin de chaque message : « Répondez-moi ici » + un lien vers votre WhatsApp (celui de Paramètres).
+                Ajouté automatiquement : à la fin de chaque message, « Répondez-moi ici » + un lien vers votre WhatsApp (celui de Paramètres) ; et au tout premier message, votre présentation (« c’est [votre nom], l’auteur de [titre] ») si elle n’y figure pas déjà.
               </p>
             )}
             <p className="font-mono text-[10px] mt-1.5" style={{ color: colors.mist }}>
